@@ -101,15 +101,6 @@ store := storage.NewConcurrentMapSwissStorage[int, string](storage.WithDefaultCa
 cm := mightymap.NewConcurrentMap[int, string](true, store)
 ```
 
-
-
-An optimized in-memory storage for better performance.
-
-```go
-store := storage.NewConcurrentMapSwissStorage[int, string]()
-cm := mightymap.NewConcurrentMap[int, string](true, store)
-```
-
 ### Badger Storage
 
 Uses BadgerDB for persistent storage.
