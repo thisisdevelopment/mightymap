@@ -1,5 +1,11 @@
 # MightyMap
 
+[![go report card](https://goreportcard.com/badge/github.com/thisisdevelopment/mightymap "go report card")](https://goreportcard.com/report/github.com/thisisdevelopment/mightymap)
+[![codecov](https://codecov.io/gh/thisisdevelopment/mightymap/graph/badge.svg?token=DMJCBUY273)](https://codecov.io/gh/thisisdevelopment/mightymap)
+[![CircleCI](https://dl.circleci.com/status-badge/img/gh/thisisdevelopment/mightymap/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/thisisdevelopment/mightymap/tree/master)
+[![GoDoc](https://godoc.org/github.com/thisisdevelopment/mightymap?status.svg)](https://godoc.org/github.com/thisisdevelopment/mightymap)
+
+
 MightyMap is a powerful, thread-safe, and concurrent map implementation for Go with configurable storage backends. It provides flexibility in choosing different storage engines depending on your performance and feature requirements.
 
 ## Features
