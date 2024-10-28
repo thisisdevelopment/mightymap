@@ -6,7 +6,7 @@
 [![GoDoc](https://godoc.org/github.com/thisisdevelopment/mightymap?status.svg)](https://godoc.org/github.com/thisisdevelopment/mightymap)
 
 
-MightyMap is a powerful, thread-safe, and concurrent map implementation for Go with configurable storage backends. It provides flexibility in choosing different storage engines depending on your performance and feature requirements.
+MightyMap is a powerful, thread-safe, and concurrent generic map implementation for Go with configurable storage backends. 🔒 It provides type-safe operations through Go generics and flexibility in choosing different storage engines depending on your performance and feature requirements. 🚀 The generic implementation allows you to create strongly-typed maps with any comparable key type and any value type. 💪
 
 ## Features
 
@@ -212,7 +212,7 @@ type IConcurrentMapStorage[K comparable, V any] interface {
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request.
+Contributions are welcome! We especially encourage contributions of new storage backends. Please open an issue to discuss your ideas or submit a pull request with your implementation.
 
 ## License
 
