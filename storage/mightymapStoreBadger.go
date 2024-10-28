@@ -23,6 +23,7 @@ type badgerOpts struct {
 	blockSize         int
 	loggingLevel      int
 	metricsEnabled    bool
+	detectConflicts   bool
 }
 
 type concurrentMapBadgerStorage[K comparable, V any] struct {
@@ -114,6 +115,7 @@ func getDefaultBadgerOptions() *badgerOpts {
 		blockSize:         16 * 1024,
 		loggingLevel:      int(badger.ERROR),
 		metricsEnabled:    true,
+		detectConflicts:   true,
 	}
 }
 
@@ -200,6 +202,14 @@ func WithLoggingLevel(loggingLevel int) OptionFuncBadger {
 func WithMetricsEnabled(metricsEnabled bool) OptionFuncBadger {
 	return func(o *badgerOpts) {
 		o.metricsEnabled = metricsEnabled
+	}
+}
+
+// WithDetectConflicts enables or disables conflict detection in Badger.
+// **Default value**: `true`
+func WithDetectConflicts(detectConflicts bool) OptionFuncBadger {
+	return func(o *badgerOpts) {
+		o.detectConflicts = detectConflicts
 	}
 }
 

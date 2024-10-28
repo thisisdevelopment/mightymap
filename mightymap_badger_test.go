@@ -10,7 +10,10 @@ import (
 func TestConcurrentMap_BadgerStorage(t *testing.T) {
 	// Testing ConcurrentMap with Badger storage implementation
 
-	store := storage.NewConcurrentMapBadgerStorage[int, string]()
+	store := storage.NewConcurrentMapBadgerStorage[int, string](
+		storage.WithMemoryStorage(true),
+		storage.WithDetectConflicts(false),
+	)
 	cm := mightymap.NewConcurrentMap[int, string](true, store)
 
 	// Repeat the same test cases as in TestConcurrentMap_DefaultStorage

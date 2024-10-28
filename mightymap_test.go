@@ -58,6 +58,13 @@ func TestConcurrentMap_DefaultStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("Pop Nonexistent Key", func(t *testing.T) {
+		value, ok := cm.Pop(42)
+		if ok {
+			t.Errorf("Expected to pop 'nil', got '%v'", value)
+		}
+	})
+
 	t.Run("Next", func(t *testing.T) {
 		cm.Store(4, "four")
 		value, key, ok := cm.Next()
