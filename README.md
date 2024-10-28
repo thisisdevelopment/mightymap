@@ -173,9 +173,25 @@ BenchmarkDefaultStorageLoad-12          24373977                45.56 ns/op     
 BenchmarkDefaultStorageDelete-12        33667726                31.96 ns/op            8 B/op          1 allocs/op
 PASS
 ok      github.com/thisisdevelopment/mightymap/storage  35.461s
+```
 
+## Limitations
+- The **default storage** backend and **Swiss backend** are not thread-safe by default. Using Delete() while iterating with Range() will cause a deadlock. To safely delete items while iterating, collect the keys to delete during Range() and call Delete() with all keys after Range() completes. For example:
 
+```go
+// Collect keys to delete during iteration
+keysToDelete := []K{}
 
+cm.Range(func(key K, value V) bool {
+    // Replace this condition with your own logic
+    if shouldDelete(key, value) {
+        keysToDelete = append(keysToDelete, key)
+    }
+    return true // Continue iteration
+})
+
+// Delete all collected keys after iteration
+cm.Delete(keysToDelete...)
 ```
 
 ## StorageAPI Reference
