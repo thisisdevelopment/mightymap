@@ -128,6 +128,37 @@ store := storage.NewConcurrentMapBadgerStorage[int, string](
 cm := mightymap.NewConcurrentMap[int, string](true, store)
 ```
 
+For the BadgerDB backend, you can customize the options to optimize performance and storage behavior.
+
+```
+    WithNumCompactors(numCompactors int).         // Set the number of compaction workers.
+    WithMetricsEnabled(metricsEnabled bool).      // Enable or disable metrics collection.
+    WithDetectConflicts(detectConflicts bool).    // Enable or disable conflict detection.
+    WithLoggingLevel(loggingLevel badger.LoggerLevel). // Set the logging level.
+    WithBlockSize(blockSize int).                 // Set the size of each block in bytes.
+    WithNumVersionsToKeep(numVersionsToKeep int). // Set the number of versions to keep per key.
+    WithIndexCacheSize(indexCacheSize int64).     // Set the size of the index cache in bytes.
+    WithInMemory(memoryStorage bool).             // Use in-memory storage if true.
+    WithBlockCacheSize(blockCacheSize int64)      // Set the size of the block cache in bytes.
+```
+
+sensible defaults are used if you don't specify options.
+
+```	
+return &badgerOpts{
+		dir:               os.TempDir() + fmt.Sprintf("/badger-%d", time.Now().UnixNano()),
+		compression:       false,
+		memoryStorage:     true,
+		numCompactors:     4,
+		numVersionsToKeep: 1,
+		indexCacheSize:    int64(128 << 20),
+		blockCacheSize:    512 << 20,
+		blockSize:         16 * 1024,
+		loggingLevel:      int(badger.ERROR),
+		metricsEnabled:    true,
+}
+```
+
 ## API Reference
 
 ### Methods
