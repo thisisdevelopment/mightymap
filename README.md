@@ -131,6 +131,7 @@ For the BadgerDB backend, you can customize the options to optimize performance 
     WithIndexCacheSize(indexCacheSize int64).     // Set the size of the index cache in bytes.
     WithInMemory(memoryStorage bool).             // Use in-memory storage if true.
     WithBlockCacheSize(blockCacheSize int64)      // Set the size of the block cache in bytes.
+    WithCompression(compression bool)             // Enable or disable data compression using ZSTD.
 ```
 
 sensible defaults are used if you don't specify options.
