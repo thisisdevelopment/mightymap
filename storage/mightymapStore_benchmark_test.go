@@ -7,14 +7,14 @@ import (
 )
 
 func BenchmarkDefaultStorageStore(b *testing.B) {
-	store := storage.NewConcurrentMapDefaultStorage[int, string]()
+	store := storage.NewMightyMapDefaultStorage[int, string]()
 	for i := 0; i < b.N; i++ {
 		store.Store(i, "value")
 	}
 }
 
 func BenchmarkDefaultStorageLoad(b *testing.B) {
-	store := storage.NewConcurrentMapDefaultStorage[int, string]()
+	store := storage.NewMightyMapDefaultStorage[int, string]()
 	// Pre-populate the store
 	for i := 0; i < 1000000; i++ {
 		store.Store(i, "value")
@@ -26,7 +26,7 @@ func BenchmarkDefaultStorageLoad(b *testing.B) {
 }
 
 func BenchmarkDefaultStorageDelete(b *testing.B) {
-	store := storage.NewConcurrentMapDefaultStorage[int, string]()
+	store := storage.NewMightyMapDefaultStorage[int, string]()
 	// Pre-populate the store
 	for i := 0; i < 1000000; i++ {
 		store.Store(i, "value")

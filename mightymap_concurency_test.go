@@ -10,7 +10,7 @@ import (
 func TestConcurrentMap_Concurrency(t *testing.T) {
 	// Testing concurrent access to ConcurrentMap
 
-	cm := mightymap.NewConcurrentMap[int, int](true)
+	cm := mightymap.New[int, int](true)
 	var wg sync.WaitGroup
 
 	t.Run("Concurrent Store", func(t *testing.T) {

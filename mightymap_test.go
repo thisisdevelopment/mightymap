@@ -9,7 +9,7 @@ import (
 func TestConcurrentMap_DefaultStorage(t *testing.T) {
 	// Testing ConcurrentMap with default storage (map[K]V)
 
-	cm := mightymap.NewConcurrentMap[int, string](true)
+	cm := mightymap.New[int, string](true)
 
 	t.Run("Store and Load", func(t *testing.T) {
 		cm.Store(1, "one")

@@ -6,7 +6,7 @@ import (
 	"github.com/dolthub/swiss"
 )
 
-type concurrentMapSwissStorage[K comparable, V any] struct {
+type mightyMapSwissStorage[K comparable, V any] struct {
 	data  *swiss.Map[K, V]
 	mutex *sync.RWMutex
 }
@@ -17,41 +17,48 @@ type swissOpts struct {
 
 const defaultSwissCapacity = 10_000
 
+// OptionFuncSwiss is a function type that modifies swissOpts configuration.
+// It allows customizing the behavior of the swiss.Map storage implementation
+// through functional options pattern.
 type OptionFuncSwiss func(*swissOpts)
 
-func NewConcurrentMapSwissStorage[K comparable, V any](optfuncs ...OptionFuncSwiss) IConcurrentMapStorage[K, V] {
+// NewMightyMapSwissStorage creates a new thread-safe map storage implementation using swiss.Map
+// with optional configuration through OptionFuncSwiss functions.
+func NewMightyMapSwissStorage[K comparable, V any](optfuncs ...OptionFuncSwiss) IMightyMapStorage[K, V] {
 	opts := getDefaultSwissOptions()
 
 	for _, optfunc := range optfuncs {
 		optfunc(opts)
 	}
 
-	return &concurrentMapSwissStorage[K, V]{
+	return &mightyMapSwissStorage[K, V]{
 		data:  swiss.NewMap[K, V](opts.defaultCapacity),
 		mutex: &sync.RWMutex{},
 	}
 }
 
+// WithDefaultCapacity returns an OptionFuncSwiss that sets the initial capacity of the swiss.Map.
+// The capacity should be set based on the expected number of items to optimize memory usage.
 func WithDefaultCapacity(capacity uint32) OptionFuncSwiss {
 	return func(o *swissOpts) {
 		o.defaultCapacity = capacity
 	}
 }
 
-func (c *concurrentMapSwissStorage[K, V]) Load(key K) (value V, ok bool) {
+func (c *mightyMapSwissStorage[K, V]) Load(key K) (value V, ok bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	value, ok = c.data.Get(key)
 	return
 }
 
-func (c *concurrentMapSwissStorage[K, V]) Store(key K, value V) {
+func (c *mightyMapSwissStorage[K, V]) Store(key K, value V) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.data.Put(key, value)
 }
 
-func (c *concurrentMapSwissStorage[K, V]) Delete(keys ...K) {
+func (c *mightyMapSwissStorage[K, V]) Delete(keys ...K) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for _, key := range keys {
@@ -59,7 +66,7 @@ func (c *concurrentMapSwissStorage[K, V]) Delete(keys ...K) {
 	}
 }
 
-func (c *concurrentMapSwissStorage[K, V]) Range(f func(key K, value V) bool) {
+func (c *mightyMapSwissStorage[K, V]) Range(f func(key K, value V) bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	c.data.Iter(func(k K, v V) bool {
@@ -67,19 +74,19 @@ func (c *concurrentMapSwissStorage[K, V]) Range(f func(key K, value V) bool) {
 	})
 }
 
-func (c *concurrentMapSwissStorage[K, V]) Len() int {
+func (c *mightyMapSwissStorage[K, V]) Len() int {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.data.Count()
 }
 
-func (c *concurrentMapSwissStorage[K, V]) Clear() {
+func (c *mightyMapSwissStorage[K, V]) Clear() {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.data.Clear()
 }
 
-func (c *concurrentMapSwissStorage[K, V]) Next() (key K, value V, ok bool) {
+func (c *mightyMapSwissStorage[K, V]) Next() (key K, value V, ok bool) {
 	c.Range(func(k K, v V) bool {
 		value = v
 		key = k

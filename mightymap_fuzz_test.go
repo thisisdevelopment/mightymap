@@ -22,16 +22,16 @@ func FuzzConcurrentMap(f *testing.F) {
 		// Create storages
 		storages := []struct {
 			name  string
-			store storage.IConcurrentMapStorage[int, string]
+			store storage.IMightyMapStorage[int, string]
 		}{
-			{"DefaultStorage", storage.NewConcurrentMapDefaultStorage[int, string]()},
-			{"SwissStorage", storage.NewConcurrentMapSwissStorage[int, string]()},
+			{"DefaultStorage", storage.NewMightyMapDefaultStorage[int, string]()},
+			{"SwissStorage", storage.NewMightyMapSwissStorage[int, string]()},
 			{"BadgerStorage", newBadgerStorageForFuzz()},
 		}
 
 		for _, s := range storages {
 			t.Run(s.name, func(t *testing.T) {
-				cm := mightymap.NewConcurrentMap[int, string](true, s.store)
+				cm := mightymap.New[int, string](true, s.store)
 
 				// Perform operations
 				cm.Store(key, value)
@@ -68,9 +68,9 @@ func FuzzConcurrentMap(f *testing.F) {
 	})
 }
 
-func newBadgerStorageForFuzz() storage.IConcurrentMapStorage[int, string] {
+func newBadgerStorageForFuzz() storage.IMightyMapStorage[int, string] {
 	// Use in-memory Badger storage for fuzzing
-	return storage.NewConcurrentMapBadgerStorage[int, string](
+	return storage.NewMightyMapBadgerStorage[int, string](
 		storage.WithMemoryStorage(true),
 	)
 }

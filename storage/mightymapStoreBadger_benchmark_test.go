@@ -11,7 +11,7 @@ func BenchmarkBadgerStorageStore(b *testing.B) {
 	dir := os.TempDir() + "/badger_benchmark_store"
 	defer os.RemoveAll(dir)
 
-	store := storage.NewConcurrentMapBadgerStorage[int, string](
+	store := storage.NewMightyMapBadgerStorage[int, string](
 		storage.WithMemoryStorage(false),
 		storage.WithTempDir(dir),
 	)
@@ -25,7 +25,7 @@ func BenchmarkBadgerStorageLoad(b *testing.B) {
 	dir := os.TempDir() + "/badger_benchmark_load"
 	defer os.RemoveAll(dir)
 
-	store := storage.NewConcurrentMapBadgerStorage[int, string](
+	store := storage.NewMightyMapBadgerStorage[int, string](
 		storage.WithMemoryStorage(false),
 		storage.WithTempDir(dir),
 	)
@@ -43,7 +43,7 @@ func BenchmarkBadgerStorageDelete(b *testing.B) {
 	dir := os.TempDir() + "/badger_benchmark_delete"
 	defer os.RemoveAll(dir)
 
-	store := storage.NewConcurrentMapBadgerStorage[int, string](
+	store := storage.NewMightyMapBadgerStorage[int, string](
 		storage.WithMemoryStorage(false),
 		storage.WithTempDir(dir),
 	)

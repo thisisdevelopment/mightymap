@@ -40,7 +40,7 @@ import (
 
 func main() {
     // Create a new concurrent map that allows overwriting existing keys
-    cm := mightymap.NewConcurrentMap[int, string](true)
+    cm := mightymap.New[int, string](true)
 
     // Store a value
     cm.Store(1, "one")
@@ -76,9 +76,9 @@ Uses the standard Go map with mutex locking.
 
 ```go
 store := storage.NewConcurrentMapDefaultStorage[int, string]()
-cm := mightymap.NewConcurrentMap[int, string](true, store)
+cm := mightymap.New[int, string](true, store)
 -- or just --
-cm := mightymap.NewConcurrentMap[int, string](true)
+cm := mightymap.New[int, string](true)
 ```
 
 ### Swiss Storage
@@ -91,14 +91,14 @@ To use Swiss Storage:
 
 ```go
 store := storage.NewConcurrentMapSwissStorage[int, string]()
-cm := mightymap.NewConcurrentMap[int, string](true, store)
+cm := mightymap.New[int, string](true, store)
 ```
 
 You can also customize the initial capacity to optimize memory usage for your specific use case:
 
 ```go
 store := storage.NewConcurrentMapSwissStorage[int, string](storage.WithDefaultCapacity(100_000))
-cm := mightymap.NewConcurrentMap[int, string](true, store)
+cm := mightymap.New[int, string](true, store)
 ```
 
 ### Badger Storage
@@ -116,7 +116,7 @@ store := storage.NewConcurrentMapBadgerStorage[int, string](
     storage.WithMemoryStorage(false),
     storage.WithTempDir("/path/to/db"),
 )
-cm := mightymap.NewConcurrentMap[int, string](true, store)
+cm := mightymap.New[int, string](true, store)
 ```
 
 For the BadgerDB backend, you can customize the options to optimize performance and storage behavior.
@@ -167,7 +167,7 @@ return &badgerOpts{
 
 ### Constructor
 
-- `NewConcurrentMap[K comparable, V any](allowOverwrite bool, storages ...storage.IConcurrentMapStorage[K, V]) *ConcurrentMap[K, V]`
+- `New[K comparable, V any](allowOverwrite bool, storages ...storage.IConcurrentMapStorage[K, V]) *Map[K, V]`
 
     - `allowOverwrite`: If `true`, existing keys can be overwritten when using `Store()`. If `false`, `Store()` will only insert new keys.
     - `storages`: Optional storage implementation.
@@ -221,7 +221,6 @@ cm.Delete(keysToDelete...)
 
 ### Methods
 ```
-type IConcurrentMapStorage[K comparable, V any] interface {
 	Load(key K) (value V, ok bool)
 	Store(key K, value V)
 	Delete(keys ...K)
@@ -229,7 +228,6 @@ type IConcurrentMapStorage[K comparable, V any] interface {
 	Next() (key K, value V, ok bool)
 	Len() int
 	Clear()
-}
 ```
 
 

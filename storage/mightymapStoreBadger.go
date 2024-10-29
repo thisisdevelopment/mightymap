@@ -24,17 +24,38 @@ type badgerOpts struct {
 	loggingLevel      int
 	metricsEnabled    bool
 	detectConflicts   bool
+	gcInterval        time.Duration
+	gcPercentage      float64
 }
 
-type concurrentMapBadgerStorage[K comparable, V any] struct {
+type mightyMapBadgerStorage[K comparable, V any] struct {
 	db  *badger.DB
 	len atomic.Int64
 	mtx sync.Mutex
 }
 
+// OptionFuncBadger is a function type that modifies badgerOpts configuration.
+// It allows customizing the behavior of the BadgerDB storage implementation
+// through functional options pattern. WithXXX...
 type OptionFuncBadger func(*badgerOpts)
 
-func NewConcurrentMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger) IConcurrentMapStorage[K, V] {
+// NewMightyMapBadgerStorage creates a new thread-safe storage implementation using BadgerDB.
+// It accepts optional configuration through OptionFuncBadger functions to customize the BadgerDB instance.
+//
+// Parameters:
+//   - optfuncs: Optional configuration functions that modify badgerOpts settings
+//
+// The function:
+//  1. Starts with default options and applies any provided option functions
+//  2. Configures BadgerDB options including compression, logging level, and performance settings
+//  3. Opens a BadgerDB instance with the configured options
+//  4. Starts a background goroutine for value log garbage collection
+//
+// Returns:
+//   - IMightyMapStorage[K, V]: A new BadgerDB-backed storage implementation
+//
+// Panics if BadgerDB fails to open with the provided configuration.
+func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger) IMightyMapStorage[K, V] {
 	// default options
 	opts := getDefaultBadgerOptions()
 
@@ -89,14 +110,14 @@ func NewConcurrentMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBa
 
 	// start a goroutine to run value log GC, sensible defaults according to the docs
 	go func() {
-		ticker := time.NewTicker(10 * time.Second)
+		ticker := time.NewTicker(opts.gcInterval)
 		defer ticker.Stop()
 		for range ticker.C {
-			_ = db.RunValueLogGC(0.5)
+			_ = db.RunValueLogGC(opts.gcPercentage)
 		}
 	}()
 
-	return &concurrentMapBadgerStorage[K, V]{
+	return &mightyMapBadgerStorage[K, V]{
 		db:  db,
 		len: atomic.Int64{},
 		mtx: sync.Mutex{},
@@ -116,105 +137,13 @@ func getDefaultBadgerOptions() *badgerOpts {
 		loggingLevel:      int(badger.ERROR),
 		metricsEnabled:    true,
 		detectConflicts:   true,
-	}
-}
-
-// WithTempDir sets the directory for storing the Badger database files.
-// **Default value**: `os.TempDir() + "/badger-{timestamp}"`
-func WithTempDir(dir string) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.dir = dir
-	}
-}
-
-// WithMemoryStorage enables or disables in-memory storage.
-// If set to `true`, the database will be stored in memory.
-// **Default value**: `true`
-func WithMemoryStorage(memoryStorage bool) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.memoryStorage = memoryStorage
-	}
-}
-
-// WithCompression enables or disables data compression using ZSTD in Badger.
-// **Default value**: `false`
-func WithCompression(compression bool) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.compression = compression
-	}
-}
-
-// WithNumCompactors sets the number of compaction workers in Badger.
-// **Default value**: `8`
-func WithNumCompactors(numCompactors int) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.numCompactors = numCompactors
-	}
-}
-
-// WithNumVersionsToKeep specifies the number of versions to keep per key.
-// **Default value**: `2`
-func WithNumVersionsToKeep(numVersionsToKeep int) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.numVersionsToKeep = numVersionsToKeep
-	}
-}
-
-// WithIndexCacheSize sets the size of the LSM tree cache in bytes.
-// **Default value**: `128 << 20` (128 MB)
-func WithIndexCacheSize(indexCacheSize int64) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.indexCacheSize = indexCacheSize
-	}
-}
-
-// WithBlockCacheSize sets the size of the block cache in bytes.
-// **Default value**: `512 << 20` (512 MB)
-func WithBlockCacheSize(blockCacheSize int64) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.blockCacheSize = blockCacheSize
-	}
-}
-
-// WithBlockSize sets the size of each block in the LSM tree in bytes.
-// **Default value**: `16 * 1024` (16 KB)
-func WithBlockSize(blockSize int) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.blockSize = blockSize
-	}
-}
-
-// WithLoggingLevel sets the logging level for Badger.
-// **Default value**: `int(badger.ERROR)`
-// Logging levels:
-// - `0`: `DEBUG`
-// - `1`: `INFO`
-// - `2`: `WARNING`
-// - `3`: `ERROR`
-func WithLoggingLevel(loggingLevel int) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.loggingLevel = loggingLevel
-	}
-}
-
-// WithMetricsEnabled enables or disables metrics collection in Badger.
-// **Default value**: `false`
-func WithMetricsEnabled(metricsEnabled bool) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.metricsEnabled = metricsEnabled
-	}
-}
-
-// WithDetectConflicts enables or disables conflict detection in Badger.
-// **Default value**: `true`
-func WithDetectConflicts(detectConflicts bool) OptionFuncBadger {
-	return func(o *badgerOpts) {
-		o.detectConflicts = detectConflicts
+		gcInterval:        10 * time.Second,
+		gcPercentage:      0.5,
 	}
 }
 
 // Store adds a key-value pair to the Badger storage.
-func (c *concurrentMapBadgerStorage[K, V]) Store(key K, value V) {
+func (c *mightyMapBadgerStorage[K, V]) Store(key K, value V) {
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
 		panic(err)
@@ -234,7 +163,7 @@ func (c *concurrentMapBadgerStorage[K, V]) Store(key K, value V) {
 	c.len.Add(1)
 }
 
-func (c *concurrentMapBadgerStorage[K, V]) Load(key K) (value V, ok bool) {
+func (c *mightyMapBadgerStorage[K, V]) Load(key K) (value V, ok bool) {
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
 		panic(err)
@@ -267,7 +196,7 @@ func (c *concurrentMapBadgerStorage[K, V]) Load(key K) (value V, ok bool) {
 	return value, true
 }
 
-func (c *concurrentMapBadgerStorage[K, V]) Delete(keys ...K) {
+func (c *mightyMapBadgerStorage[K, V]) Delete(keys ...K) {
 	for _, key := range keys {
 		if _, ok := c.Load(key); !ok {
 			continue
@@ -289,7 +218,7 @@ func (c *concurrentMapBadgerStorage[K, V]) Delete(keys ...K) {
 	}
 }
 
-func (c *concurrentMapBadgerStorage[K, V]) Range(f func(key K, value V) bool) {
+func (c *mightyMapBadgerStorage[K, V]) Range(f func(key K, value V) bool) {
 	// var key K
 	// var value V
 	// st := time.Now()
@@ -336,11 +265,11 @@ func (c *concurrentMapBadgerStorage[K, V]) Range(f func(key K, value V) bool) {
 	}
 }
 
-func (c *concurrentMapBadgerStorage[K, V]) Len() int {
+func (c *mightyMapBadgerStorage[K, V]) Len() int {
 	return int(c.len.Load())
 }
 
-func (c *concurrentMapBadgerStorage[K, V]) Clear() {
+func (c *mightyMapBadgerStorage[K, V]) Clear() {
 	err := c.db.DropAll()
 	if err != nil {
 		panic(err)
@@ -348,7 +277,7 @@ func (c *concurrentMapBadgerStorage[K, V]) Clear() {
 	c.len.Store(0)
 }
 
-func (c *concurrentMapBadgerStorage[K, V]) Next() (key K, value V, ok bool) {
+func (c *mightyMapBadgerStorage[K, V]) Next() (key K, value V, ok bool) {
 	err := c.db.View(func(txn *badger.Txn) error {
 		opts := badger.IteratorOptions{
 			PrefetchValues: true,

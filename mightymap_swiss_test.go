@@ -10,8 +10,8 @@ import (
 func TestConcurrentMap_SwissStorage(t *testing.T) {
 	// Testing ConcurrentMap with SwissMap storage implementation
 
-	store := storage.NewConcurrentMapSwissStorage[int, string]()
-	cm := mightymap.NewConcurrentMap[int, string](true, store)
+	store := storage.NewMightyMapSwissStorage[int, string]()
+	cm := mightymap.New[int, string](true, store)
 
 	// Repeat the same test cases as in TestConcurrentMap_DefaultStorage
 
