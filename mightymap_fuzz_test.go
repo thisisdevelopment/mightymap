@@ -7,7 +7,7 @@ import (
 	"github.com/thisisdevelopment/mightymap/storage"
 )
 
-func FuzzConcurrentMap(f *testing.F) {
+func FuzzMightyMap(f *testing.F) {
 	// Seed the fuzzer with initial inputs
 	f.Add(int(1), "one")
 	f.Add(int(2), "two")

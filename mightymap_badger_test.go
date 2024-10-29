@@ -7,8 +7,8 @@ import (
 	"github.com/thisisdevelopment/mightymap/storage"
 )
 
-func TestConcurrentMap_BadgerStorage(t *testing.T) {
-	// Testing ConcurrentMap with Badger storage implementation
+func TestMightyMap_BadgerStorage(t *testing.T) {
+	// Testing MightyMap with Badger storage implementation
 
 	store := storage.NewMightyMapBadgerStorage[int, string](
 		storage.WithMemoryStorage(true),
@@ -16,7 +16,7 @@ func TestConcurrentMap_BadgerStorage(t *testing.T) {
 	)
 	cm := mightymap.New[int, string](true, store)
 
-	// Repeat the same test cases as in TestConcurrentMap_DefaultStorage
+	// Repeat the same test cases as in TestMightyMap_DefaultStorage
 
 	t.Run("Store and Load", func(t *testing.T) {
 		cm.Store(1, "one")

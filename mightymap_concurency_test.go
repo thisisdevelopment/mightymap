@@ -7,8 +7,8 @@ import (
 	"github.com/thisisdevelopment/mightymap"
 )
 
-func TestConcurrentMap_Concurrency(t *testing.T) {
-	// Testing concurrent access to ConcurrentMap
+func TestMightyMap_Concurrency(t *testing.T) {
+	// Testing concurrent access to MightyMap
 
 	cm := mightymap.New[int, int](true)
 	var wg sync.WaitGroup

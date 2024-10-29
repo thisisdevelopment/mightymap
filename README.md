@@ -75,7 +75,7 @@ MightyMap allows you to choose different storage backends. Here's how to use the
 Uses the standard Go map with mutex locking.
 
 ```go
-store := storage.NewConcurrentMapDefaultStorage[int, string]()
+store := storage.NewMightyMapDefaultStorage[int, string]()
 cm := mightymap.New[int, string](true, store)
 -- or just --
 cm := mightymap.New[int, string](true)
@@ -90,14 +90,14 @@ By utilizing Swiss Storage, MightyMap achieves optimized performance for workloa
 To use Swiss Storage:
 
 ```go
-store := storage.NewConcurrentMapSwissStorage[int, string]()
+store := storage.NewMightyMapSwissStorage[int, string]()
 cm := mightymap.New[int, string](true, store)
 ```
 
 You can also customize the initial capacity to optimize memory usage for your specific use case:
 
 ```go
-store := storage.NewConcurrentMapSwissStorage[int, string](storage.WithDefaultCapacity(100_000))
+store := storage.NewMightyMapSwissStorage[int, string](storage.WithDefaultCapacity(100_000))
 cm := mightymap.New[int, string](true, store)
 ```
 
@@ -112,7 +112,7 @@ For more information about BadgerDB, visit the [BadgerDB GitHub repository](http
 
 
 ```go
-store := storage.NewConcurrentMapBadgerStorage[int, string](
+store := storage.NewMightyMapBadgerStorage[int, string](
     storage.WithMemoryStorage(false),
     storage.WithTempDir("/path/to/db"),
 )
@@ -167,7 +167,7 @@ return &badgerOpts{
 
 ### Constructor
 
-- `New[K comparable, V any](allowOverwrite bool, storages ...storage.IConcurrentMapStorage[K, V]) *Map[K, V]`
+- `New[K comparable, V any](allowOverwrite bool, storages ...storage.IMightyMapStorage[K, V]) *Map[K, V]`
 
     - `allowOverwrite`: If `true`, existing keys can be overwritten when using `Store()`. If `false`, `Store()` will only insert new keys.
     - `storages`: Optional storage implementation.

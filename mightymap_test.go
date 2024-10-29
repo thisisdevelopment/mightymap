@@ -6,8 +6,8 @@ import (
 	"github.com/thisisdevelopment/mightymap"
 )
 
-func TestConcurrentMap_DefaultStorage(t *testing.T) {
-	// Testing ConcurrentMap with default storage (map[K]V)
+func TestMightyMap_DefaultStorage(t *testing.T) {
+	// Testing MightyMap with default storage (map[K]V)
 
 	cm := mightymap.New[int, string](true)
 

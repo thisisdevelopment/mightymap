@@ -7,13 +7,13 @@ import (
 	"github.com/thisisdevelopment/mightymap/storage"
 )
 
-func TestConcurrentMap_SwissStorage(t *testing.T) {
-	// Testing ConcurrentMap with SwissMap storage implementation
+func TestMightyMap_SwissStorage(t *testing.T) {
+	// Testing MightyMap with SwissMap storage implementation
 
 	store := storage.NewMightyMapSwissStorage[int, string]()
 	cm := mightymap.New[int, string](true, store)
 
-	// Repeat the same test cases as in TestConcurrentMap_DefaultStorage
+	// Repeat the same test cases as in TestMightyMap_DefaultStorage
 
 	t.Run("Store and Load", func(t *testing.T) {
 		cm.Store(1, "one")
