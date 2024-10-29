@@ -107,10 +107,10 @@ func (m *Map[K, V]) Iter() iter.Seq2[K, V] {
 func (m *Map[K, V]) Pop(key K) (value V, ok bool) {
 	value, ok = m.storage.Load(key)
 	if !ok {
-		return value, ok
+		return
 	}
 	m.storage.Delete(key)
-	return value, true
+	return
 }
 
 // Next returns the next key-value pair from the map.
