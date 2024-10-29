@@ -92,4 +92,16 @@ func TestConcurrentMap_DefaultStorage(t *testing.T) {
 			t.Errorf("Expected map to be cleared")
 		}
 	})
+
+	t.Run("Iter", func(t *testing.T) {
+		cm.Store(2, "two")
+		cm.Store(3, "three")
+		keys := make(map[int]bool)
+		for k, _ := range cm.Iter() {
+			keys[k] = true
+		}
+		if len(keys) != 2 {
+			t.Errorf("Expected to iter over 2 keys, got %d", len(keys))
+		}
+	})
 }

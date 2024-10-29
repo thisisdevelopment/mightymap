@@ -16,17 +16,19 @@
 //
 // Example usage:
 //
-//	cm := mightymap.New[int, string](true)
-//	cm.Store(1, "one")
-//	value, ok := cm.Load(1)
+//	m := mightymap.New[int, string](true)
+//	m.Store(1, "one")
+//	value, ok := m.Load(1)
 //
 // For custom storage backends:
 //
-//	store := storage.NewConcurrentMapSwissStorage[int, string]()
-//	cm := mightymap.New[int, string](true, store)
+//	store := storage.NewMightyMapSwissStorage[int, string]()
+//	m := mightymap.New[int, string](true, store)
 package mightymap
 
 import (
+	"iter"
+
 	"github.com/thisisdevelopment/mightymap/storage"
 )
 
@@ -61,62 +63,70 @@ func New[K comparable, V any](allowOverwrite bool, storages ...storage.IMightyMa
 
 // Load retrieves a value from the map for the given key.
 // Returns the value and true if found, zero value and false if not present.
-func (cm *Map[K, V]) Load(key K) (value V, ok bool) {
-	return cm.storage.Load(key)
+func (m *Map[K, V]) Load(key K) (value V, ok bool) {
+	return m.storage.Load(key)
 }
 
 // Has checks if a key exists in the map.
 // Returns true if the key exists, false otherwise.
-func (cm *Map[K, V]) Has(key K) (ok bool) {
-	_, ok = cm.storage.Load(key)
+func (m *Map[K, V]) Has(key K) (ok bool) {
+	_, ok = m.storage.Load(key)
 	return
 }
 
 // Store inserts or updates a value in the map for the given key.
 // If allowOverwrite is false, it will only insert if the key doesn't exist.
-func (cm *Map[K, V]) Store(key K, value V) {
-	if _, ok := cm.storage.Load(key); !ok || cm.allowOverwrite {
-		cm.storage.Store(key, value)
+func (m *Map[K, V]) Store(key K, value V) {
+	if _, ok := m.storage.Load(key); !ok || m.allowOverwrite {
+		m.storage.Store(key, value)
 	}
 }
 
 // Delete removes one or more keys and their associated values from the map.
-func (cm *Map[K, V]) Delete(keys ...K) {
-	cm.storage.Delete(keys...)
+func (m *Map[K, V]) Delete(keys ...K) {
+	m.storage.Delete(keys...)
 }
 
 // Range iterates over the map's key-value pairs in an unspecified order,
 // calling the provided function for each pair.
 // If the function returns false, iteration stops.
-func (cm *Map[K, V]) Range(f func(key K, value V) bool) {
-	cm.storage.Range(f)
+func (m *Map[K, V]) Range(f func(key K, value V) bool) {
+	m.storage.Range(f)
+}
+
+// Iter allows using the map in Go's range construct, iterates over the map's key-value pairs
+// in an unspecified order.
+func (m *Map[K, V]) Iter() iter.Seq2[K, V] {
+	return func(yield func(K, V) bool) {
+		m.storage.Range(yield)
+	}
 }
 
 // Pop retrieves and removes a value from the map.
 // Returns the value and true if found, zero value and false if not present.
-func (cm *Map[K, V]) Pop(key K) (value V, ok bool) {
-	value, ok = cm.storage.Load(key)
+func (m *Map[K, V]) Pop(key K) (value V, ok bool) {
+	value, ok = m.storage.Load(key)
 	if !ok {
 		return value, ok
 	}
-	cm.storage.Delete(key)
+	m.storage.Delete(key)
 	return value, true
 }
 
 // Next returns the next key-value pair from the map.
 // The iteration order is not specified.
 // Returns zero values and false when there are no more items.
-func (cm *Map[K, V]) Next() (value V, key K, ok bool) {
-	key, value, ok = cm.storage.Next()
+func (m *Map[K, V]) Next() (value V, key K, ok bool) {
+	key, value, ok = m.storage.Next()
 	return
 }
 
 // Len returns the number of key-value pairs in the map.
-func (cm *Map[K, V]) Len() int {
-	return cm.storage.Len()
+func (m *Map[K, V]) Len() int {
+	return m.storage.Len()
 }
 
 // Clear removes all key-value pairs from the map.
-func (cm *Map[K, V]) Clear() {
-	cm.storage.Clear()
+func (m *Map[K, V]) Clear() {
+	m.storage.Clear()
 }
