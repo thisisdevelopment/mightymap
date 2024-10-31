@@ -1,6 +1,54 @@
 package storage
 
-import "time"
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/dgraph-io/badger/v4"
+)
+
+type badgerOpts struct {
+	dir                   string
+	memoryStorage         bool
+	compression           bool
+	numCompactors         int
+	numVersionsToKeep     int
+	indexCacheSize        int64
+	blockCacheSize        int64
+	blockSize             int
+	loggingLevel          int
+	metricsEnabled        bool
+	detectConflicts       bool
+	gcInterval            time.Duration
+	gcPercentage          float64
+	memTableSize          int64
+	valueThreshold        int64
+	encryptionKey         string
+	encryptionKeyRotation time.Duration
+}
+
+func getDefaultBadgerOptions() *badgerOpts {
+	return &badgerOpts{
+		dir:                   os.TempDir() + fmt.Sprintf("/badger-%d", time.Now().UnixNano()),
+		compression:           false,
+		memoryStorage:         true,
+		numCompactors:         4,
+		numVersionsToKeep:     1,
+		indexCacheSize:        int64(128 << 20),
+		blockCacheSize:        512 << 20,
+		blockSize:             16 * 1024,
+		loggingLevel:          int(badger.ERROR),
+		metricsEnabled:        true,
+		detectConflicts:       true,
+		gcInterval:            10 * time.Second,
+		gcPercentage:          0.5,
+		memTableSize:          64 << 20,
+		valueThreshold:        1 << 20,
+		encryptionKey:         "",
+		encryptionKeyRotation: 10 * 24 * time.Hour, // 10 days default
+	}
+}
 
 // WithTempDir sets the directory for storing the Badger database files.
 // **Default value**: `os.TempDir() + "/badger-{timestamp}"`
@@ -109,5 +157,40 @@ func WithGcInterval(gcInterval time.Duration) OptionFuncBadger {
 func WithGcPercentage(gcPercentage float64) OptionFuncBadger {
 	return func(o *badgerOpts) {
 		o.gcPercentage = gcPercentage
+	}
+}
+
+// WithMemTableSize sets the size of the memtable in bytes.
+// **Default value**: `128 << 20` (128 MB)
+func WithMemTableSize(memTableSize int64) OptionFuncBadger {
+	return func(o *badgerOpts) {
+		o.memTableSize = memTableSize
+	}
+}
+
+// WithValueThreshold sets the threshold for value storage in Badger.
+// **Default value**: `4 << 20` (4 MB)
+func WithValueThreshold(valueThreshold int64) OptionFuncBadger {
+	return func(o *badgerOpts) {
+		o.valueThreshold = valueThreshold
+	}
+}
+
+// WithEncryptionKey sets the encryption key for the Badger database.
+func WithEncryptionKey(encryptionKey string) OptionFuncBadger {
+	// During OpenKeyRegistry error: Encryption key's length should beeither 16, 24, or 32 bytes
+	if len(encryptionKey) != 16 && len(encryptionKey) != 24 && len(encryptionKey) != 32 {
+		panic(fmt.Sprintf("Encryption key's length should be either 16, 24, or 32 bytes current length: %d", len(encryptionKey)))
+	}
+
+	return func(o *badgerOpts) {
+		o.encryptionKey = encryptionKey
+	}
+}
+
+// WithEncryptionKeyRotation sets the rotation duration for the encryption key in Badger.
+func WithEncryptionKeyRotationDuration(encryptionKeyRotation time.Duration) OptionFuncBadger {
+	return func(o *badgerOpts) {
+		o.encryptionKeyRotation = encryptionKeyRotation
 	}
 }

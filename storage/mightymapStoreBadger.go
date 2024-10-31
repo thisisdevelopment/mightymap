@@ -1,9 +1,6 @@
 package storage
 
 import (
-	"fmt"
-	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -12,26 +9,9 @@ import (
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
-type badgerOpts struct {
-	dir               string
-	memoryStorage     bool
-	compression       bool
-	numCompactors     int
-	numVersionsToKeep int
-	indexCacheSize    int64
-	blockCacheSize    int64
-	blockSize         int
-	loggingLevel      int
-	metricsEnabled    bool
-	detectConflicts   bool
-	gcInterval        time.Duration
-	gcPercentage      float64
-}
-
 type mightyMapBadgerStorage[K comparable, V any] struct {
 	db  *badger.DB
 	len atomic.Int64
-	mtx sync.Mutex
 }
 
 // OptionFuncBadger is a function type that modifies badgerOpts configuration.
@@ -101,7 +81,15 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 		WithNumVersionsToKeep(opts.numVersionsToKeep).
 		WithIndexCacheSize(opts.indexCacheSize).
 		WithInMemory(opts.memoryStorage).
-		WithBlockCacheSize(opts.blockCacheSize)
+		WithMemTableSize(opts.memTableSize).
+		WithBlockCacheSize(opts.blockCacheSize).
+		WithValueThreshold(opts.valueThreshold)
+
+	if opts.encryptionKey != "" {
+		badgerOpts = badgerOpts.
+			WithEncryptionKey([]byte(opts.encryptionKey)).
+			WithEncryptionKeyRotationDuration(opts.encryptionKeyRotation)
+	}
 
 	db, err := badger.Open(badgerOpts)
 	if err != nil {
@@ -120,25 +108,6 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 	return &mightyMapBadgerStorage[K, V]{
 		db:  db,
 		len: atomic.Int64{},
-		mtx: sync.Mutex{},
-	}
-}
-
-func getDefaultBadgerOptions() *badgerOpts {
-	return &badgerOpts{
-		dir:               os.TempDir() + fmt.Sprintf("/badger-%d", time.Now().UnixNano()),
-		compression:       false,
-		memoryStorage:     true,
-		numCompactors:     4,
-		numVersionsToKeep: 1,
-		indexCacheSize:    int64(128 << 20),
-		blockCacheSize:    512 << 20,
-		blockSize:         16 * 1024,
-		loggingLevel:      int(badger.ERROR),
-		metricsEnabled:    true,
-		detectConflicts:   true,
-		gcInterval:        10 * time.Second,
-		gcPercentage:      0.5,
 	}
 }
 
