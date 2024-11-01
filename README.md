@@ -133,8 +133,9 @@ For the BadgerDB backend, you can customize the options to optimize performance 
     WithBlockCacheSize(blockCacheSize int64)      // Set the size of the block cache in bytes.
     WithCompression(compression bool)             // Enable or disable data compression using ZSTD.
     WithValueThreshold(valueThreshold int64)      // Set the threshold for value storage in bytes.
-    WithEncryptionKey(encryptionKey string)      // Set the encryption key for the Badger database.
+    WithEncryptionKey(encryptionKey string)       // Set the encryption key for the Badger database.
     WithEncryptionKeyRotationDuration(encryptionKeyRotation time.Duration) // Set the rotation duration for the encryption key in Badger.
+    WithSyncWrites(syncWrites bool)               // Enable or disable synchronous writes in Badger.
 ```
 
 sensible defaults are used if you don't specify options.
@@ -158,6 +159,7 @@ sensible defaults are used if you don't specify options.
 		valueThreshold:        1 << 20,
 		encryptionKey:         "",
 		encryptionKeyRotation: 10 * 24 * time.Hour, // 10 days default
+		syncWrites:            false,
 	}
 ```
 

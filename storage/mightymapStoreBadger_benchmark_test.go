@@ -39,6 +39,39 @@ func BenchmarkBadgerStorageLoad(b *testing.B) {
 	}
 }
 
+func BenchmarkBadgerStorageLoadWithSync(b *testing.B) {
+	dir := os.TempDir() + "/badger_benchmark_load_sync"
+	defer os.RemoveAll(dir)
+
+	store := storage.NewMightyMapBadgerStorage[int, string](
+		storage.WithMemoryStorage(false),
+		storage.WithTempDir(dir),
+		storage.WithSyncWrites(true),
+	)
+
+	b.ResetTimer()
+	// Pre-populate the store
+	for i := 0; i < b.N; i++ {
+		store.Store(i, "value")
+	}
+}
+
+func BenchmarkBadgerStorageLoadNoSync(b *testing.B) {
+	dir := os.TempDir() + "/badger_benchmark_load_nosync"
+	defer os.RemoveAll(dir)
+
+	store := storage.NewMightyMapBadgerStorage[int, string](
+		storage.WithMemoryStorage(false),
+		storage.WithTempDir(dir),
+	)
+
+	b.ResetTimer()
+	// Pre-populate the store
+	for i := 0; i < b.N; i++ {
+		store.Store(i, "value")
+	}
+}
+
 func BenchmarkBadgerStorageDelete(b *testing.B) {
 	dir := os.TempDir() + "/badger_benchmark_delete"
 	defer os.RemoveAll(dir)

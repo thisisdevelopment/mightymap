@@ -83,7 +83,8 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 		WithInMemory(opts.memoryStorage).
 		WithMemTableSize(opts.memTableSize).
 		WithBlockCacheSize(opts.blockCacheSize).
-		WithValueThreshold(opts.valueThreshold)
+		WithValueThreshold(opts.valueThreshold).
+		WithSyncWrites(opts.syncWrites)
 
 	if opts.encryptionKey != "" {
 		badgerOpts = badgerOpts.

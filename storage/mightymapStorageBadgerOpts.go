@@ -26,6 +26,7 @@ type badgerOpts struct {
 	valueThreshold        int64
 	encryptionKey         string
 	encryptionKeyRotation time.Duration
+	syncWrites            bool
 }
 
 func getDefaultBadgerOptions() *badgerOpts {
@@ -47,6 +48,7 @@ func getDefaultBadgerOptions() *badgerOpts {
 		valueThreshold:        1 << 20,
 		encryptionKey:         "",
 		encryptionKeyRotation: 10 * 24 * time.Hour, // 10 days default
+		syncWrites:            false,
 	}
 }
 
@@ -188,9 +190,17 @@ func WithEncryptionKey(encryptionKey string) OptionFuncBadger {
 	}
 }
 
-// WithEncryptionKeyRotation sets the rotation duration for the encryption key in Badger.
+// WithEncryptionKeyRotationDuration sets the rotation duration for the encryption key in Badger.
 func WithEncryptionKeyRotationDuration(encryptionKeyRotation time.Duration) OptionFuncBadger {
 	return func(o *badgerOpts) {
 		o.encryptionKeyRotation = encryptionKeyRotation
+	}
+}
+
+// WithSyncWrites enables or disables synchronous writes in Badger.
+// **Default value**: `false`
+func WithSyncWrites(syncWrites bool) OptionFuncBadger {
+	return func(o *badgerOpts) {
+		o.syncWrites = syncWrites
 	}
 }
