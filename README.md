@@ -140,18 +140,25 @@ For the BadgerDB backend, you can customize the options to optimize performance 
 sensible defaults are used if you don't specify options.
 
 ```	
-return &badgerOpts{
-		dir:               os.TempDir() + fmt.Sprintf("/badger-%d", time.Now().UnixNano()),
-		compression:       false,
-		memoryStorage:     true,
-		numCompactors:     4,
-		numVersionsToKeep: 1,
-		indexCacheSize:    int64(128 << 20),
-		blockCacheSize:    512 << 20,
-		blockSize:         16 * 1024,
-		loggingLevel:      int(badger.ERROR),
-		metricsEnabled:    true,
-}
+	return &badgerOpts{
+		dir:                   os.TempDir() + fmt.Sprintf("/badger-%d", time.Now().UnixNano()),
+		compression:           false,
+		memoryStorage:         true,
+		numCompactors:         4,
+		numVersionsToKeep:     1,
+		indexCacheSize:        int64(128 << 20),
+		blockCacheSize:        512 << 20,
+		blockSize:             16 * 1024,
+		loggingLevel:          int(badger.ERROR),
+		metricsEnabled:        true,
+		detectConflicts:       true,
+		gcInterval:            10 * time.Second,
+		gcPercentage:          0.5,
+		memTableSize:          64 << 20,
+		valueThreshold:        1 << 20,
+		encryptionKey:         "",
+		encryptionKeyRotation: 10 * 24 * time.Hour, // 10 days default
+	}
 ```
 
 ## API Reference
