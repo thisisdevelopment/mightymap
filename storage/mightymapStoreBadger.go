@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"log"
 	"sync/atomic"
 	"time"
 
@@ -211,7 +212,8 @@ func (c *mightyMapBadgerStorage[K, V]) Range(f func(key K, value V) bool) {
 			var k K
 			err := msgpack.Unmarshal(kBytes, &k)
 			if err != nil {
-				return err
+				log.Printf("error: unmarshalling key: '%v' err: %v", string(kBytes), err)
+				continue
 			}
 
 			vBytes, err := item.ValueCopy(nil)
@@ -221,7 +223,8 @@ func (c *mightyMapBadgerStorage[K, V]) Range(f func(key K, value V) bool) {
 			var v V
 			err = msgpack.Unmarshal(vBytes, &v)
 			if err != nil {
-				return err
+				log.Printf("error: unmarshalling value for key '%v' err: %v", string(kBytes), err)
+				continue
 			}
 
 			if !f(k, v) {
