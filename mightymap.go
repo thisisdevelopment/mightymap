@@ -120,3 +120,8 @@ func (m *Map[K, V]) Len() int {
 func (m *Map[K, V]) Clear() {
 	m.storage.Clear()
 }
+
+// Close closes the map
+func (m *Map[K, V]) Close() error {
+	return m.storage.Close()
+}

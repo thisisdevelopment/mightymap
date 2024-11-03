@@ -51,5 +51,10 @@ func TestMightyMap_BadgerStorage_Encryption(t *testing.T) {
 		}
 	})
 
+	err := cm.Close()
+	if err != nil {
+		t.Errorf("Error closing map: %v", err)
+	}
+
 	// Add other test cases...
 }

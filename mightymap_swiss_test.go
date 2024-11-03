@@ -23,5 +23,10 @@ func TestMightyMap_SwissStorage(t *testing.T) {
 		}
 	})
 
+	err := cm.Close()
+	if err != nil {
+		t.Errorf("Error closing map: %v", err)
+	}
+
 	// Add other test cases...
 }

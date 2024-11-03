@@ -101,6 +101,11 @@ func (c *mightyMapSwissStorage[K, V]) Next() (key K, value V, ok bool) {
 	return
 }
 
+func (c *mightyMapSwissStorage[K, V]) Close() error {
+	// nothing to do
+	return nil
+}
+
 func getDefaultSwissOptions() *swissOpts {
 	return &swissOpts{
 		defaultCapacity: defaultSwissCapacity,

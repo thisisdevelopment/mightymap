@@ -176,6 +176,7 @@ sensible defaults are used if you don't specify options.
 - `Next() (value V, key K, ok bool)`: Retrieves the next key-value pair.
 - `Len() int`: Returns the number of items in the map.
 - `Clear()`: Removes all items from the map.
+- `Close() error`: Closes the map.
 
 ### Constructor
 

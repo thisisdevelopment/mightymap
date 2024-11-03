@@ -12,6 +12,7 @@ type IMightyMapStorage[K comparable, V any] interface {
 	Next() (key K, value V, ok bool)
 	Len() int
 	Clear()
+	Close() error
 }
 
 type mightyMapDefaultStorage[K comparable, V any] struct {
@@ -82,4 +83,9 @@ func (c *mightyMapDefaultStorage[K, V]) Next() (key K, value V, ok bool) {
 	}
 
 	return
+}
+
+func (c *mightyMapDefaultStorage[K, V]) Close() error {
+	// nothing to do
+	return nil
 }

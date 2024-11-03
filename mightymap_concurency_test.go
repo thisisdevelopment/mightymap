@@ -26,6 +26,11 @@ func TestMightyMap_Concurrency(t *testing.T) {
 		if cm.Len() != 1000 {
 			t.Errorf("Expected 1000 items, got %d", cm.Len())
 		}
+
+		err := cm.Close()
+		if err != nil {
+			t.Errorf("Error closing map: %v", err)
+		}
 	})
 
 	t.Run("Concurrent Load and Delete", func(t *testing.T) {

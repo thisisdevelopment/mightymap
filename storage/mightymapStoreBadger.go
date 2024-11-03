@@ -294,3 +294,7 @@ func (c *mightyMapBadgerStorage[K, V]) Next() (key K, value V, ok bool) {
 	}
 	return key, value, ok
 }
+
+func (c *mightyMapBadgerStorage[K, V]) Close() error {
+	return c.db.Close()
+}
