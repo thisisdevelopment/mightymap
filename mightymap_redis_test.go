@@ -202,8 +202,7 @@ func TestMightyMap_RedisStorage_ComplexObjects(t *testing.T) {
 		storage.WithRedisExpire(1*time.Hour),
 		storage.WithRedisTimeout(5*time.Second),
 		storage.WithRedisPrefix("session_"),
-
-		// storage.WithRedisMock(t),
+		storage.WithRedisMock(t),
 	)
 	cm := mightymap.New[string, *Session](true, store)
 
