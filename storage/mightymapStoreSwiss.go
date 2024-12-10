@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"sync"
 
 	"github.com/dolthub/swiss"
@@ -45,20 +46,20 @@ func WithDefaultCapacity(capacity uint32) OptionFuncSwiss {
 	}
 }
 
-func (c *mightyMapSwissStorage[K, V]) Load(key K) (value V, ok bool) {
+func (c *mightyMapSwissStorage[K, V]) Load(_ context.Context, key K) (value V, ok bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	value, ok = c.data.Get(key)
 	return
 }
 
-func (c *mightyMapSwissStorage[K, V]) Store(key K, value V) {
+func (c *mightyMapSwissStorage[K, V]) Store(_ context.Context, key K, value V) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.data.Put(key, value)
 }
 
-func (c *mightyMapSwissStorage[K, V]) Delete(keys ...K) {
+func (c *mightyMapSwissStorage[K, V]) Delete(_ context.Context, keys ...K) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for _, key := range keys {
@@ -66,7 +67,7 @@ func (c *mightyMapSwissStorage[K, V]) Delete(keys ...K) {
 	}
 }
 
-func (c *mightyMapSwissStorage[K, V]) Range(f func(key K, value V) bool) {
+func (c *mightyMapSwissStorage[K, V]) Range(_ context.Context, f func(key K, value V) bool) {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	c.data.Iter(func(k K, v V) bool {
@@ -74,20 +75,20 @@ func (c *mightyMapSwissStorage[K, V]) Range(f func(key K, value V) bool) {
 	})
 }
 
-func (c *mightyMapSwissStorage[K, V]) Len() int {
+func (c *mightyMapSwissStorage[K, V]) Len(_ context.Context) int {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()
 	return c.data.Count()
 }
 
-func (c *mightyMapSwissStorage[K, V]) Clear() {
+func (c *mightyMapSwissStorage[K, V]) Clear(_ context.Context) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.data.Clear()
 }
 
-func (c *mightyMapSwissStorage[K, V]) Next() (key K, value V, ok bool) {
-	c.Range(func(k K, v V) bool {
+func (c *mightyMapSwissStorage[K, V]) Next(ctx context.Context) (key K, value V, ok bool) {
+	c.Range(ctx, func(k K, v V) bool {
 		value = v
 		key = k
 		return false
@@ -95,13 +96,13 @@ func (c *mightyMapSwissStorage[K, V]) Next() (key K, value V, ok bool) {
 
 	if key != *new(K) {
 		ok = true
-		c.Delete(key)
+		c.Delete(ctx, key)
 	}
 
 	return
 }
 
-func (c *mightyMapSwissStorage[K, V]) Close() error {
+func (c *mightyMapSwissStorage[K, V]) Close(_ context.Context) error {
 	// nothing to do
 	return nil
 }

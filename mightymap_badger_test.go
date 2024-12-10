@@ -1,12 +1,15 @@
 package mightymap_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/thisisdevelopment/mightymap"
 	"github.com/thisisdevelopment/mightymap/storage"
 )
+
+var ctx = context.Background()
 
 func TestMightyMap_BadgerStorage(t *testing.T) {
 	// Testing MightyMap with Badger storage implementation
@@ -20,8 +23,8 @@ func TestMightyMap_BadgerStorage(t *testing.T) {
 	// Repeat the same test cases as in TestMightyMap_DefaultStorage
 
 	t.Run("Store and Load", func(t *testing.T) {
-		cm.Store(1, "one")
-		value, ok := cm.Load(1)
+		cm.Store(ctx, 1, "one")
+		value, ok := cm.Load(ctx, 1)
 		if !ok || value != "one" {
 			t.Errorf("Expected to load 'one', got '%v'", value)
 		}
@@ -44,14 +47,14 @@ func TestMightyMap_BadgerStorage_Encryption(t *testing.T) {
 	// Repeat the same test cases as in TestMightyMap_DefaultStorage
 
 	t.Run("Store and Load", func(t *testing.T) {
-		cm.Store(1, "one")
-		value, ok := cm.Load(1)
+		cm.Store(ctx, 1, "one")
+		value, ok := cm.Load(ctx, 1)
 		if !ok || value != "one" {
 			t.Errorf("Expected to load 'one', got '%v'", value)
 		}
 	})
 
-	err := cm.Close()
+	err := cm.Close(ctx)
 	if err != nil {
 		t.Errorf("Error closing map: %v", err)
 	}

@@ -34,10 +34,10 @@ func FuzzMightyMap(f *testing.F) {
 				cm := mightymap.New[int, string](true, s.store)
 
 				// Perform operations
-				cm.Store(key, value)
+				cm.Store(ctx, key, value)
 
 				// Load the stored value
-				loadedValue, ok := cm.Load(key)
+				loadedValue, ok := cm.Load(ctx, key)
 				if !ok {
 					t.Errorf("Failed to load key: %d", key)
 				}
@@ -46,7 +46,7 @@ func FuzzMightyMap(f *testing.F) {
 				}
 
 				// Test Pop
-				poppedValue, ok := cm.Pop(key)
+				poppedValue, ok := cm.Pop(ctx, key)
 				if !ok {
 					t.Errorf("Failed to pop key: %d", key)
 				}
@@ -55,13 +55,13 @@ func FuzzMightyMap(f *testing.F) {
 				}
 
 				// Ensure the key is deleted
-				_, ok = cm.Load(key)
+				_, ok = cm.Load(ctx, key)
 				if ok {
 					t.Errorf("Key '%d' should have been deleted after Pop", key)
 				}
 
 				// Clear the map to free up memory
-				cm.Clear()
+				cm.Clear(ctx)
 				cm = nil
 			})
 		}

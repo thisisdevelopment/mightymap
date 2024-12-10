@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"log"
 	"sync/atomic"
 	"time"
@@ -114,7 +115,7 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 }
 
 // Store adds a key-value pair to the Badger storage.
-func (c *mightyMapBadgerStorage[K, V]) Store(key K, value V) {
+func (c *mightyMapBadgerStorage[K, V]) Store(_ context.Context, key K, value V) {
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
 		panic(err)
@@ -134,7 +135,7 @@ func (c *mightyMapBadgerStorage[K, V]) Store(key K, value V) {
 	c.len.Add(1)
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Load(key K) (value V, ok bool) {
+func (c *mightyMapBadgerStorage[K, V]) Load(_ context.Context, key K) (value V, ok bool) {
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
 		panic(err)
@@ -167,9 +168,9 @@ func (c *mightyMapBadgerStorage[K, V]) Load(key K) (value V, ok bool) {
 	return value, true
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Delete(keys ...K) {
+func (c *mightyMapBadgerStorage[K, V]) Delete(ctx context.Context, keys ...K) {
 	for _, key := range keys {
-		if _, ok := c.Load(key); !ok {
+		if _, ok := c.Load(ctx, key); !ok {
 			continue
 		}
 
@@ -189,23 +190,17 @@ func (c *mightyMapBadgerStorage[K, V]) Delete(keys ...K) {
 	}
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Range(f func(key K, value V) bool) {
-	// var key K
-	// var value V
-	// st := time.Now()
+func (c *mightyMapBadgerStorage[K, V]) Range(_ context.Context, f func(key K, value V) bool) {
 	err := c.db.View(func(txn *badger.Txn) error {
 		opts := badger.IteratorOptions{
 			PrefetchValues: true,
-			// PrefetchSize:   100,
-			Reverse:     false,
-			AllVersions: false,
+			Reverse:        false,
+			AllVersions:    false,
 		}
 
-		// opts := badger.DefaultIteratorOptions
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		// st := time.Now()
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			kBytes := item.Key()
@@ -238,11 +233,11 @@ func (c *mightyMapBadgerStorage[K, V]) Range(f func(key K, value V) bool) {
 	}
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Len() int {
+func (c *mightyMapBadgerStorage[K, V]) Len(_ context.Context) int {
 	return int(c.len.Load())
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Clear() {
+func (c *mightyMapBadgerStorage[K, V]) Clear(_ context.Context) {
 	err := c.db.DropAll()
 	if err != nil {
 		panic(err)
@@ -250,7 +245,7 @@ func (c *mightyMapBadgerStorage[K, V]) Clear() {
 	c.len.Store(0)
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Next() (key K, value V, ok bool) {
+func (c *mightyMapBadgerStorage[K, V]) Next(ctx context.Context) (key K, value V, ok bool) {
 	err := c.db.View(func(txn *badger.Txn) error {
 		opts := badger.IteratorOptions{
 			PrefetchValues: true,
@@ -286,7 +281,7 @@ func (c *mightyMapBadgerStorage[K, V]) Next() (key K, value V, ok bool) {
 		}
 
 		ok = true
-		c.Delete(key)
+		c.Delete(ctx, key)
 		return nil
 	})
 	if err != nil {
@@ -295,6 +290,6 @@ func (c *mightyMapBadgerStorage[K, V]) Next() (key K, value V, ok bool) {
 	return key, value, ok
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Close() error {
+func (c *mightyMapBadgerStorage[K, V]) Close(_ context.Context) error {
 	return c.db.Close()
 }

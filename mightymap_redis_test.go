@@ -17,37 +17,37 @@ func TestMightyMap_RedisStorage(t *testing.T) {
 	cm := mightymap.New[int, string](true, store)
 
 	// Clean up any existing data
-	cm.Clear()
+	cm.Clear(ctx)
 
 	t.Run("Store and Load", func(t *testing.T) {
-		cm.Store(1, "one")
-		value, ok := cm.Load(1)
+		cm.Store(ctx, 1, "one")
+		value, ok := cm.Load(ctx, 1)
 		if !ok || value != "one" {
 			t.Errorf("Expected to load 'one', got '%v'", value)
 		}
 	})
 
 	t.Run("Has", func(t *testing.T) {
-		if !cm.Has(1) {
+		if !cm.Has(ctx, 1) {
 			t.Errorf("Expected key 1 to exist")
 		}
-		if cm.Has(2) {
+		if cm.Has(ctx, 2) {
 			t.Errorf("Did not expect key 2 to exist")
 		}
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		cm.Delete(1)
-		if cm.Has(1) {
+		cm.Delete(ctx, 1)
+		if cm.Has(ctx, 1) {
 			t.Errorf("Expected key 1 to be deleted")
 		}
 	})
 
 	t.Run("Range", func(t *testing.T) {
-		cm.Store(2, "two")
-		cm.Store(3, "three")
+		cm.Store(ctx, 2, "two")
+		cm.Store(ctx, 3, "three")
 		keys := make(map[int]bool)
-		cm.Range(func(key int, value string) bool {
+		cm.Range(ctx, func(key int, value string) bool {
 			keys[key] = true
 			return true
 		})
@@ -57,55 +57,55 @@ func TestMightyMap_RedisStorage(t *testing.T) {
 	})
 
 	t.Run("Pop", func(t *testing.T) {
-		value, ok := cm.Pop(2)
+		value, ok := cm.Pop(ctx, 2)
 		if !ok || value != "two" {
 			t.Errorf("Expected to pop 'two', got '%v'", value)
 		}
-		if cm.Has(2) {
+		if cm.Has(ctx, 2) {
 			t.Errorf("Expected key 2 to be deleted after Pop")
 		}
 	})
 
 	t.Run("Pop Nonexistent Key", func(t *testing.T) {
-		value, ok := cm.Pop(42)
+		value, ok := cm.Pop(ctx, 42)
 		if ok {
 			t.Errorf("Expected pop to return false for nonexistent key, got value '%v'", value)
 		}
 	})
 
 	t.Run("Next", func(t *testing.T) {
-		cm.Store(4, "four")
-		value, key, ok := cm.Next()
+		cm.Store(ctx, 4, "four")
+		value, key, ok := cm.Next(ctx)
 		if !ok {
 			t.Errorf("Expected to get next value")
 		}
 		if value != "three" && value != "four" {
 			t.Errorf("Unexpected value '%v'", value)
 		}
-		if cm.Has(key) {
+		if cm.Has(ctx, key) {
 			t.Errorf("Expected key %d to be deleted after Next", key)
 		}
 	})
 
 	t.Run("Len", func(t *testing.T) {
 		// Clear first to have a known state
-		cm.Clear()
-		cm.Store(1, "one")
-		if cm.Len() != 1 {
-			t.Errorf("Expected map to have 1 item, got %d", cm.Len())
+		cm.Clear(ctx)
+		cm.Store(ctx, 1, "one")
+		if cm.Len(ctx) != 1 {
+			t.Errorf("Expected map to have 1 item, got %d", cm.Len(ctx))
 		}
 	})
 
 	t.Run("Clear", func(t *testing.T) {
-		cm.Store(5, "five")
-		cm.Clear()
-		if cm.Len() != 0 {
-			t.Errorf("Expected map to be empty after Clear, got length %d", cm.Len())
+		cm.Store(ctx, 5, "five")
+		cm.Clear(ctx)
+		if cm.Len(ctx) != 0 {
+			t.Errorf("Expected map to be empty after Clear, got length %d", cm.Len(ctx))
 		}
 	})
 
 	t.Run("Close", func(t *testing.T) {
-		err := cm.Close()
+		err := cm.Close(ctx)
 		if err != nil {
 			t.Errorf("Error closing map: %v", err)
 		}
@@ -127,13 +127,13 @@ func TestMightyMap_RedisStorage_Configuration(t *testing.T) {
 		)
 		cm := mightymap.New[int, string](true, store)
 
-		cm.Store(1, "one")
-		value, ok := cm.Load(1)
+		cm.Store(ctx, 1, "one")
+		value, ok := cm.Load(ctx, 1)
 		if !ok || value != "one" {
 			t.Errorf("Expected to load 'one', got '%v'", value)
 		}
 
-		err := cm.Close()
+		err := cm.Close(ctx)
 		if err != nil {
 			t.Errorf("Error closing map: %v", err)
 		}
@@ -154,7 +154,7 @@ func TestMightyMap_RedisStorage_Concurrency(t *testing.T) {
 		// Concurrent stores
 		for i := 0; i < numOperations; i++ {
 			go func(val int) {
-				cm.Store(val, "value")
+				cm.Store(ctx, val, "value")
 				done <- true
 			}(i)
 		}
@@ -165,14 +165,14 @@ func TestMightyMap_RedisStorage_Concurrency(t *testing.T) {
 		}
 
 		// Verify length
-		if cm.Len() != numOperations {
-			t.Errorf("Expected length %d, got %d", numOperations, cm.Len())
+		if cm.Len(ctx) != numOperations {
+			t.Errorf("Expected length %d, got %d", numOperations, cm.Len(ctx))
 		}
 
 		// Concurrent loads
 		for i := 0; i < numOperations; i++ {
 			go func(val int) {
-				_, ok := cm.Load(val)
+				_, ok := cm.Load(ctx, val)
 				if !ok {
 					t.Errorf("Failed to load value for key %d", val)
 				}
@@ -185,8 +185,8 @@ func TestMightyMap_RedisStorage_Concurrency(t *testing.T) {
 			<-done
 		}
 
-		cm.Clear()
-		err := cm.Close()
+		cm.Clear(ctx)
+		err := cm.Close(ctx)
 		if err != nil {
 			t.Errorf("Error closing map: %v", err)
 		}
@@ -207,11 +207,11 @@ func TestMightyMap_RedisStorage_ComplexObjects(t *testing.T) {
 	cm := mightymap.New[string, *Session](true, store)
 
 	// Clean up any existing data
-	cm.Clear()
+	cm.Clear(ctx)
 
 	t.Run("Store and Load", func(t *testing.T) {
-		cm.Store("123", &Session{UserID: "123"})
-		value, ok := cm.Load("123")
+		cm.Store(ctx, "123", &Session{UserID: "123"})
+		value, ok := cm.Load(ctx, "123")
 		if !ok || value.UserID != "123" {
 			t.Errorf("Expected to load 'session_123', got '%v'", value)
 		}

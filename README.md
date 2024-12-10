@@ -26,6 +26,9 @@ To install MightyMap, use `go get`:
 go get github.com/thisisdevelopment/mightymap
 ```
 
+## Note v0.3.1 to v0.4.0
+The `ctx` parameter is now required for all methods. This is a breaking change. Since we allow multiple storage backends, we need to be able pass the context to the storage backend.
+
 ## Usage
 
 Here is a simple example of how to use MightyMap:
@@ -40,26 +43,27 @@ import (
 
 func main() {
     // Create a new concurrent map that allows overwriting existing keys
+    ctx := context.Background()
     cm := mightymap.New[int, string](true)
 
     // Store a value
-    cm.Store(1, "one")
+    cm.Store(ctx, 1, "one")
 
     // Load a value
-    value, ok := cm.Load(1)
+    value, ok := cm.Load(ctx, 1)
     if ok {
         fmt.Println("Loaded value:", value)
     }
 
     // Check if a key exists
-    exists := cm.Has(2)
+    exists := cm.Has(ctx, 2)
     fmt.Println("Key 2 exists:", exists)
 
     // Delete a key
-    cm.Delete(1)
+    cm.Delete(ctx, 1)
 
     // Get map length
-    fmt.Println("Map length:", cm.Len())
+    fmt.Println("Map length:", cm.Len(ctx))
 
     // Clear the map
     cm.Clear()
@@ -234,13 +238,13 @@ cm.Delete(keysToDelete...)
 
 ### Methods
 ```
-	Load(key K) (value V, ok bool)
-	Store(key K, value V)
-	Delete(keys ...K)
-	Range(f func(key K, value V) bool)
-	Next() (key K, value V, ok bool)
-	Len() int
-	Clear()
+	Load(ctx context.Context, key K) (value V, ok bool)
+	Store(ctx context.Context, key K, value V)
+	Delete(ctx context.Context, keys ...K)
+	Range(ctx context.Context, f func(key K, value V) bool)
+	Next(ctx context.Context) (key K, value V, ok bool)
+	Len(ctx context.Context) int
+	Clear(ctx context.Context)
 ```
 
 ## About Us Th[is]

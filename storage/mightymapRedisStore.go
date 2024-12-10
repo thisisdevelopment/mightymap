@@ -63,12 +63,12 @@ func getDefaultRedisOptions() *redisOpts {
 	return opts
 }
 
-func (c *mightyMapRedisStorage[K, V]) Store(key K, value V) {
+func (c *mightyMapRedisStorage[K, V]) Store(ctx context.Context, key K, value V) {
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
 		panic(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.timeout)
+	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
 
 	valueBytes, err := msgpack.Marshal(value)
@@ -81,12 +81,12 @@ func (c *mightyMapRedisStorage[K, V]) Store(key K, value V) {
 	}
 }
 
-func (c *mightyMapRedisStorage[K, V]) Load(key K) (value V, ok bool) {
+func (c *mightyMapRedisStorage[K, V]) Load(ctx context.Context, key K) (value V, ok bool) {
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
 		panic(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.timeout)
+	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
 
 	v, err := c.redisClient.Get(ctx, c.opts.prefix+string(keyBytes)).Bytes()
@@ -105,13 +105,13 @@ func (c *mightyMapRedisStorage[K, V]) Load(key K) (value V, ok bool) {
 	return value, true
 }
 
-func (c *mightyMapRedisStorage[K, V]) Delete(keys ...K) {
+func (c *mightyMapRedisStorage[K, V]) Delete(ctx context.Context, keys ...K) {
 	for _, key := range keys {
 		keyBytes, err := msgpack.Marshal(key)
 		if err != nil {
 			panic(err)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), c.opts.timeout)
+		ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 		defer cancel()
 		if err := c.redisClient.Del(ctx, c.opts.prefix+string(keyBytes)).Err(); err != nil {
 			panic(err)
@@ -119,8 +119,8 @@ func (c *mightyMapRedisStorage[K, V]) Delete(keys ...K) {
 	}
 }
 
-func (c *mightyMapRedisStorage[K, V]) Clear() {
-	keys, err := c.scan(c.opts.prefix + "*")
+func (c *mightyMapRedisStorage[K, V]) Clear(ctx context.Context) {
+	keys, err := c.scan(ctx, c.opts.prefix+"*")
 	if err != nil {
 		panic(err)
 	}
@@ -140,30 +140,30 @@ func (c *mightyMapRedisStorage[K, V]) Clear() {
 	}
 
 	if len(kkeys) > 0 {
-		c.Delete(kkeys...)
+		c.Delete(ctx, kkeys...)
 	}
 }
 
-func (c *mightyMapRedisStorage[K, V]) Close() error {
+func (c *mightyMapRedisStorage[K, V]) Close(_ context.Context) error {
 	return c.redisClient.Close()
 }
 
-func (c *mightyMapRedisStorage[K, V]) Len() int {
-	keys, err := c.scan(c.opts.prefix + "*")
+func (c *mightyMapRedisStorage[K, V]) Len(ctx context.Context) int {
+	keys, err := c.scan(ctx, c.opts.prefix+"*")
 	if err != nil {
 		panic(err)
 	}
 	return len(keys)
 }
 
-func (c *mightyMapRedisStorage[K, V]) Next() (key K, value V, ok bool) {
+func (c *mightyMapRedisStorage[K, V]) Next(ctx context.Context) (key K, value V, ok bool) {
 	var zeroV V
 	var zeroK K
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.timeout)
+	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
 
-	keys, err := c.scan(c.opts.prefix+"*", 1)
+	keys, err := c.scan(ctx, c.opts.prefix+"*", 1)
 	if err != nil {
 		panic(err)
 	}
@@ -191,16 +191,16 @@ func (c *mightyMapRedisStorage[K, V]) Next() (key K, value V, ok bool) {
 		panic(err)
 	}
 
-	c.Delete(k)
+	c.Delete(ctx, k)
 
 	return k, value, true
 }
 
-func (c *mightyMapRedisStorage[K, V]) Range(f func(key K, value V) bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.timeout)
+func (c *mightyMapRedisStorage[K, V]) Range(ctx context.Context, f func(key K, value V) bool) {
+	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
 
-	keys, err := c.scan(c.opts.prefix + "*")
+	keys, err := c.scan(ctx, c.opts.prefix+"*")
 	if err != nil {
 		panic(err)
 	}
@@ -233,7 +233,7 @@ func (c *mightyMapRedisStorage[K, V]) Range(f func(key K, value V) bool) {
 	}
 }
 
-func (c *mightyMapRedisStorage[K, V]) scan(keyPattern string, maxKeys ...int) ([]string, error) {
+func (c *mightyMapRedisStorage[K, V]) scan(ctx context.Context, keyPattern string, maxKeys ...int) ([]string, error) {
 	max := 2048
 	if len(maxKeys) > 0 {
 		max = maxKeys[0]
@@ -242,7 +242,7 @@ func (c *mightyMapRedisStorage[K, V]) scan(keyPattern string, maxKeys ...int) ([
 	var cursor uint64
 	var keys []string
 
-	ctx, cancel := context.WithTimeout(context.Background(), c.opts.timeout)
+	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
 
 	for {

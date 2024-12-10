@@ -27,6 +27,8 @@
 package mightymap
 
 import (
+	"context"
+
 	"github.com/thisisdevelopment/mightymap/storage"
 )
 
@@ -61,67 +63,67 @@ func New[K comparable, V any](allowOverwrite bool, storages ...storage.IMightyMa
 
 // Load retrieves a value from the map for the given key.
 // Returns the value and true if found, zero value and false if not present.
-func (m *Map[K, V]) Load(key K) (value V, ok bool) {
-	return m.storage.Load(key)
+func (m *Map[K, V]) Load(ctx context.Context, key K) (value V, ok bool) {
+	return m.storage.Load(ctx, key)
 }
 
 // Has checks if a key exists in the map.
 // Returns true if the key exists, false otherwise.
-func (m *Map[K, V]) Has(key K) (ok bool) {
-	_, ok = m.storage.Load(key)
+func (m *Map[K, V]) Has(ctx context.Context, key K) (ok bool) {
+	_, ok = m.storage.Load(ctx, key)
 	return
 }
 
 // Store inserts or updates a value in the map for the given key.
 // If allowOverwrite is false, it will only insert if the key doesn't exist.
-func (m *Map[K, V]) Store(key K, value V) {
-	if _, ok := m.storage.Load(key); !ok || m.allowOverwrite {
-		m.storage.Store(key, value)
+func (m *Map[K, V]) Store(ctx context.Context, key K, value V) {
+	if _, ok := m.storage.Load(ctx, key); !ok || m.allowOverwrite {
+		m.storage.Store(ctx, key, value)
 	}
 }
 
 // Delete removes one or more keys and their associated values from the map.
-func (m *Map[K, V]) Delete(keys ...K) {
-	m.storage.Delete(keys...)
+func (m *Map[K, V]) Delete(ctx context.Context, keys ...K) {
+	m.storage.Delete(ctx, keys...)
 }
 
 // Range iterates over the map's key-value pairs in an unspecified order,
 // calling the provided function for each pair.
 // If the function returns false, iteration stops.
-func (m *Map[K, V]) Range(f func(key K, value V) bool) {
-	m.storage.Range(f)
+func (m *Map[K, V]) Range(ctx context.Context, f func(key K, value V) bool) {
+	m.storage.Range(ctx, f)
 }
 
 // Pop retrieves and removes a value from the map.
 // Returns the value and true if found, zero value and false if not present.
-func (m *Map[K, V]) Pop(key K) (value V, ok bool) {
-	value, ok = m.storage.Load(key)
+func (m *Map[K, V]) Pop(ctx context.Context, key K) (value V, ok bool) {
+	value, ok = m.storage.Load(ctx, key)
 	if !ok {
 		return value, ok
 	}
-	m.storage.Delete(key)
+	m.storage.Delete(ctx, key)
 	return value, true
 }
 
 // Next returns the next key-value pair from the map.
 // The iteration order is not specified.
 // Returns zero values and false when there are no more items.
-func (m *Map[K, V]) Next() (value V, key K, ok bool) {
-	key, value, ok = m.storage.Next()
+func (m *Map[K, V]) Next(ctx context.Context) (value V, key K, ok bool) {
+	key, value, ok = m.storage.Next(ctx)
 	return
 }
 
 // Len returns the number of key-value pairs in the map.
-func (m *Map[K, V]) Len() int {
-	return m.storage.Len()
+func (m *Map[K, V]) Len(ctx context.Context) int {
+	return m.storage.Len(ctx)
 }
 
 // Clear removes all key-value pairs from the map.
-func (m *Map[K, V]) Clear() {
-	m.storage.Clear()
+func (m *Map[K, V]) Clear(ctx context.Context) {
+	m.storage.Clear(ctx)
 }
 
 // Close closes the map
-func (m *Map[K, V]) Close() error {
-	return m.storage.Close()
+func (m *Map[K, V]) Close(ctx context.Context) error {
+	return m.storage.Close(ctx)
 }

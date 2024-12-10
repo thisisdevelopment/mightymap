@@ -18,16 +18,16 @@ func TestMightyMap_Concurrency(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				cm.Store(i, i*i)
+				cm.Store(ctx, i, i*i)
 			}(i)
 		}
 		wg.Wait()
 
-		if cm.Len() != 1000 {
-			t.Errorf("Expected 1000 items, got %d", cm.Len())
+		if cm.Len(ctx) != 1000 {
+			t.Errorf("Expected 1000 items, got %d", cm.Len(ctx))
 		}
 
-		err := cm.Close()
+		err := cm.Close(ctx)
 		if err != nil {
 			t.Errorf("Error closing map: %v", err)
 		}
@@ -38,17 +38,17 @@ func TestMightyMap_Concurrency(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
-				value, ok := cm.Load(i)
+				value, ok := cm.Load(ctx, i)
 				if !ok || value != i*i {
 					t.Errorf("Expected to load %d, got %d", i*i, value)
 				}
-				cm.Delete(i)
+				cm.Delete(ctx, i)
 			}(i)
 		}
 		wg.Wait()
 
-		if cm.Len() != 0 {
-			t.Errorf("Expected map to be empty after deletes, got %d", cm.Len())
+		if cm.Len(ctx) != 0 {
+			t.Errorf("Expected map to be empty after deletes, got %d", cm.Len(ctx))
 		}
 	})
 }
