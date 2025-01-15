@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"crypto/tls"
 	"strings"
 	"time"
 
@@ -19,6 +20,9 @@ func NewMightyMapRedisStorage[K comparable, V any](optfuncs ...OptionFuncRedis) 
 	opts := getDefaultRedisOptions()
 	for _, optfunc := range optfuncs {
 		optfunc(opts)
+	}
+	if opts.tlsConfig == nil && opts.tls {
+		opts.tlsConfig = &tls.Config{}
 	}
 
 	clientOpts := &redis.Options{
