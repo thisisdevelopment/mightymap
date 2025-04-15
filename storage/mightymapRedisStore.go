@@ -237,14 +237,20 @@ func (c *mightyMapRedisStorage[K, V]) Range(ctx context.Context, f func(key K, v
 	}
 }
 
+const defaultCursorSize int64 = 2048
+
 func (c *mightyMapRedisStorage[K, V]) scan(ctx context.Context, keyPattern string, maxKeys ...int) ([]string, error) {
-	max := 2048
+	max := defaultCursorSize
 	if len(maxKeys) > 0 {
-		max = maxKeys[0]
+		max = int64(maxKeys[0])
 	}
 
-	var cursor uint64
-	var keys []string
+	var (
+		cursor uint64
+		keys   []string
+		err    error
+		kk     []string
+	)
 
 	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
@@ -253,13 +259,13 @@ func (c *mightyMapRedisStorage[K, V]) scan(ctx context.Context, keyPattern strin
 
 		// only string keys are returned no payloads
 		// this might be a lot slower on elasicache
-		kk, cursor, err := c.redisClient.Scan(ctx, cursor, keyPattern, 2048).Result()
+		kk, cursor, err = c.redisClient.Scan(ctx, cursor, keyPattern, max).Result()
 		if err != nil {
 			return nil, err
 		}
 		keys = append(keys, kk...)
 
-		if cursor == 0 || len(keys) >= max {
+		if cursor == 0 {
 			break
 		}
 	}
