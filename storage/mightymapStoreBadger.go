@@ -12,8 +12,9 @@ import (
 )
 
 type mightyMapBadgerStorage[K comparable, V any] struct {
-	db  *badger.DB
-	len atomic.Int64
+	db          *badger.DB
+	len         atomic.Int64
+	initLenCall atomic.Bool
 }
 
 // OptionFuncBadger is a function type that modifies badgerOpts configuration.
@@ -109,8 +110,9 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 	}()
 
 	return &mightyMapBadgerStorage[K, V]{
-		db:  db,
-		len: atomic.Int64{},
+		db:          db,
+		len:         atomic.Int64{},
+		initLenCall: atomic.Bool{},
 	}
 }
 
@@ -234,6 +236,27 @@ func (c *mightyMapBadgerStorage[K, V]) Range(_ context.Context, f func(key K, va
 }
 
 func (c *mightyMapBadgerStorage[K, V]) Len(_ context.Context) int {
+	if !c.initLenCall.Load() {
+		c.initLenCall.Store(true)
+		cnt := 0
+		err := c.db.View(func(txn *badger.Txn) error {
+			opts := badger.IteratorOptions{
+				PrefetchValues: true,
+				Reverse:        false,
+				AllVersions:    false,
+			}
+			it := txn.NewIterator(opts)
+			defer it.Close()
+			for it.Rewind(); it.Valid(); it.Next() {
+				cnt++
+			}
+			return nil
+		})
+		if err != nil {
+			panic(err)
+		}
+		c.len.Store(int64(cnt))
+	}
 	return int(c.len.Load())
 }
 

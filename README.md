@@ -29,8 +29,10 @@ go get github.com/thisisdevelopment/mightymap
 ## Note v0.3.1 to v0.4.0
 The `ctx` parameter is now required for all methods. This is a breaking change. Since we allow multiple storage backends, we need to be able pass the context to the storage backend.
 
-## Usage
+## Note on swissMap Storage
+Since golang 1.24 the default internal map implementation has been switched to a swiss map implementation. If you're using golang version >= 1.24 the SwissMapStorage implementation is obsolete, and you can just use the default storage (for in memory mightyMaps)
 
+## Usage
 Here is a simple example of how to use MightyMap:
 
 ```go
