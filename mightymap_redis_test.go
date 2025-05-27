@@ -1,6 +1,7 @@
 package mightymap_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -9,6 +10,8 @@ import (
 )
 
 func TestMightyMap_RedisStorage(t *testing.T) {
+	ctx := context.Background()
+
 	store := storage.NewMightyMapRedisStorage[int, string](
 		storage.WithRedisExpire(1*time.Hour),
 		storage.WithRedisTimeout(5*time.Second),
@@ -113,6 +116,8 @@ func TestMightyMap_RedisStorage(t *testing.T) {
 }
 
 func TestMightyMap_RedisStorage_Configuration(t *testing.T) {
+	ctx := context.Background()
+
 	t.Run("Custom Configuration", func(t *testing.T) {
 		store := storage.NewMightyMapRedisStorage[int, string](
 			storage.WithRedisAddr("localhost:6379"),
@@ -141,6 +146,8 @@ func TestMightyMap_RedisStorage_Configuration(t *testing.T) {
 }
 
 func TestMightyMap_RedisStorage_Concurrency(t *testing.T) {
+	ctx := context.Background()
+
 	store := storage.NewMightyMapRedisStorage[int, string](
 		storage.WithRedisMock(t),
 	)
@@ -198,22 +205,29 @@ type Session struct {
 }
 
 func TestMightyMap_RedisStorage_ComplexObjects(t *testing.T) {
-	store := storage.NewMightyMapRedisStorage[string, *Session](
-		storage.WithRedisExpire(1*time.Hour),
-		storage.WithRedisTimeout(5*time.Second),
-		storage.WithRedisPrefix("session_"),
+	ctx := context.Background()
+
+	// Register the complex type with gob
+	mightymap.RegisterType(Session{})
+
+	store := storage.NewMightyMapRedisStorage[string, Session](
 		storage.WithRedisMock(t),
 	)
-	cm := mightymap.New[string, *Session](true, store)
+	cm := mightymap.New[string, Session](true, store)
 
-	// Clean up any existing data
-	cm.Clear(ctx)
+	session := Session{UserID: "user123"}
+	cm.Store(ctx, "session1", session)
 
-	t.Run("Store and Load", func(t *testing.T) {
-		cm.Store(ctx, "123", &Session{UserID: "123"})
-		value, ok := cm.Load(ctx, "123")
-		if !ok || value.UserID != "123" {
-			t.Errorf("Expected to load 'session_123', got '%v'", value)
-		}
-	})
+	loaded, ok := cm.Load(ctx, "session1")
+	if !ok {
+		t.Errorf("Failed to load complex object")
+	}
+	if loaded.UserID != "user123" {
+		t.Errorf("Expected UserID 'user123', got '%s'", loaded.UserID)
+	}
+
+	err := cm.Close(ctx)
+	if err != nil {
+		t.Errorf("Error closing map: %v", err)
+	}
 }

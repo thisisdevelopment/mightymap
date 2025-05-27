@@ -1,6 +1,7 @@
 package mightymap_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/thisisdevelopment/mightymap"
@@ -14,6 +15,8 @@ func FuzzMightyMap(f *testing.F) {
 	f.Add(int(0), "")
 
 	f.Fuzz(func(t *testing.T, key int, value string) {
+		ctx := context.Background()
+
 		// Limit the size of the string value
 		if len(value) > 1000 {
 			value = value[:1000]

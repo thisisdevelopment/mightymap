@@ -1,6 +1,7 @@
 package mightymap_test
 
 import (
+	"context"
 	"sync"
 	"testing"
 
@@ -9,7 +10,7 @@ import (
 
 func TestMightyMap_Concurrency(t *testing.T) {
 	// Testing concurrent access to MightyMap
-
+	ctx := context.Background()
 	cm := mightymap.New[int, int](true)
 	var wg sync.WaitGroup
 

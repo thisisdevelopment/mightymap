@@ -12,6 +12,7 @@
 //   - Generic support for any comparable key type and any value type
 //   - Configurable overwrite behavior
 //   - Pluggable storage backends
+//   - Automatic MessagePack encoding/decoding of values for efficient storage
 //   - Comprehensive API including Store, Load, Delete, Range, Pop, and more
 //
 // Example usage:
@@ -59,6 +60,13 @@ func New[K comparable, V any](allowOverwrite bool, storages ...storage.IMightyMa
 		storage:        store,
 		allowOverwrite: allowOverwrite,
 	}
+}
+
+// RegisterType registers a type with the MessagePack encoder if needed.
+// This is maintained for backwards compatibility but generally not required for MessagePack.
+// This is a convenience wrapper around the storage RegisterMsgpackType function.
+func RegisterType(value interface{}) {
+	storage.RegisterMsgpackType(value)
 }
 
 // Load retrieves a value from the map for the given key.

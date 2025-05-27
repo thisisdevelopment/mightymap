@@ -9,10 +9,9 @@ import (
 	"github.com/thisisdevelopment/mightymap/storage"
 )
 
-var ctx = context.Background()
-
 func TestMightyMap_BadgerStorage(t *testing.T) {
 	// Testing MightyMap with Badger storage implementation
+	ctx := context.Background()
 
 	store := storage.NewMightyMapBadgerStorage[int, string](
 		storage.WithMemoryStorage(true),
@@ -35,6 +34,7 @@ func TestMightyMap_BadgerStorage(t *testing.T) {
 
 func TestMightyMap_BadgerStorage_Encryption(t *testing.T) {
 	// Testing MightyMap with Badger storage implementation
+	ctx := context.Background()
 
 	store := storage.NewMightyMapBadgerStorage[int, string](
 		storage.WithMemoryStorage(true),

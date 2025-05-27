@@ -1,6 +1,7 @@
 package mightymap_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/thisisdevelopment/mightymap"
@@ -8,7 +9,7 @@ import (
 
 func TestMightyMap_DefaultStorage(t *testing.T) {
 	// Testing MightyMap with default storage (map[K]V)
-
+	ctx := context.Background()
 	cm := mightymap.New[int, string](true)
 
 	t.Run("Store and Load", func(t *testing.T) {

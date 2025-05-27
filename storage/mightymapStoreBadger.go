@@ -11,7 +11,7 @@ import (
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
-type mightyMapBadgerStorage[K comparable, V any] struct {
+type mightyMapBadgerStorage[K comparable] struct {
 	db          *badger.DB
 	len         atomic.Int64
 	initLenCall atomic.Bool
@@ -24,6 +24,7 @@ type OptionFuncBadger func(*badgerOpts)
 
 // NewMightyMapBadgerStorage creates a new thread-safe storage implementation using BadgerDB.
 // It accepts optional configuration through OptionFuncBadger functions to customize the BadgerDB instance.
+// Values are automatically encoded using MessagePack encoding.
 //
 // Parameters:
 //   - optfuncs: Optional configuration functions that modify badgerOpts settings
@@ -109,42 +110,44 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 		}
 	}()
 
-	return &mightyMapBadgerStorage[K, V]{
+	storage := &mightyMapBadgerStorage[K]{
 		db:          db,
 		len:         atomic.Int64{},
 		initLenCall: atomic.Bool{},
 	}
+	return newMsgpackAdapter[K, V](storage)
 }
 
 // Store adds a key-value pair to the Badger storage.
-func (c *mightyMapBadgerStorage[K, V]) Store(_ context.Context, key K, value V) {
+func (c *mightyMapBadgerStorage[K]) Store(_ context.Context, key K, value []byte) {
+	// Serialize the key with MessagePack
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
+		log.Printf("Error marshalling key: %v", err)
 		panic(err)
 	}
 
-	valueBytes, err := msgpack.Marshal(value)
-	if err != nil {
-		panic(err)
-	}
-
+	// Store in BadgerDB with proper error handling
 	err = c.db.Update(func(txn *badger.Txn) error {
-		return txn.Set(keyBytes, valueBytes)
+		return txn.Set(keyBytes, value)
 	})
 	if err != nil {
+		log.Printf("Error storing value: %v", err)
 		panic(err)
 	}
 	c.len.Add(1)
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Load(_ context.Context, key K) (value V, ok bool) {
+func (c *mightyMapBadgerStorage[K]) Load(_ context.Context, key K) (value []byte, ok bool) {
+	// Serialize the key with MessagePack consistently with Store method
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
+		log.Printf("Error marshalling key: %v", err)
 		panic(err)
 	}
-
 	var valCopy []byte
 
+	// Read from BadgerDB
 	err = c.db.View(func(txn *badger.Txn) error {
 		item, err := txn.Get(keyBytes)
 		if err != nil {
@@ -159,18 +162,14 @@ func (c *mightyMapBadgerStorage[K, V]) Load(_ context.Context, key K) (value V, 
 		return nil
 	})
 	if err != nil {
-		return value, false
+		// Not found or other error
+		return nil, false
 	}
 
-	err = msgpack.Unmarshal(valCopy, &value)
-	if err != nil {
-		return value, false
-	}
-
-	return value, true
+	return valCopy, true
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Delete(ctx context.Context, keys ...K) {
+func (c *mightyMapBadgerStorage[K]) Delete(ctx context.Context, keys ...K) {
 	for _, key := range keys {
 		if _, ok := c.Load(ctx, key); !ok {
 			continue
@@ -192,7 +191,7 @@ func (c *mightyMapBadgerStorage[K, V]) Delete(ctx context.Context, keys ...K) {
 	}
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Range(_ context.Context, f func(key K, value V) bool) {
+func (c *mightyMapBadgerStorage[K]) Range(_ context.Context, f func(key K, value []byte) bool) {
 	err := c.db.View(func(txn *badger.Txn) error {
 		opts := badger.IteratorOptions{
 			PrefetchValues: true,
@@ -217,14 +216,8 @@ func (c *mightyMapBadgerStorage[K, V]) Range(_ context.Context, f func(key K, va
 			if err != nil {
 				return err
 			}
-			var v V
-			err = msgpack.Unmarshal(vBytes, &v)
-			if err != nil {
-				log.Printf("error: unmarshalling value for key '%v' err: %v", string(kBytes), err)
-				continue
-			}
 
-			if !f(k, v) {
+			if !f(k, vBytes) {
 				return nil
 			}
 		}
@@ -235,7 +228,7 @@ func (c *mightyMapBadgerStorage[K, V]) Range(_ context.Context, f func(key K, va
 	}
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Len(_ context.Context) int {
+func (c *mightyMapBadgerStorage[K]) Len(_ context.Context) int {
 	if !c.initLenCall.Load() {
 		c.initLenCall.Store(true)
 		cnt := 0
@@ -260,7 +253,7 @@ func (c *mightyMapBadgerStorage[K, V]) Len(_ context.Context) int {
 	return int(c.len.Load())
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Clear(_ context.Context) {
+func (c *mightyMapBadgerStorage[K]) Clear(_ context.Context) {
 	err := c.db.DropAll()
 	if err != nil {
 		panic(err)
@@ -268,7 +261,7 @@ func (c *mightyMapBadgerStorage[K, V]) Clear(_ context.Context) {
 	c.len.Store(0)
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Next(ctx context.Context) (key K, value V, ok bool) {
+func (c *mightyMapBadgerStorage[K]) Next(ctx context.Context) (key K, value []byte, ok bool) {
 	err := c.db.View(func(txn *badger.Txn) error {
 		opts := badger.IteratorOptions{
 			PrefetchValues: true,
@@ -297,12 +290,7 @@ func (c *mightyMapBadgerStorage[K, V]) Next(ctx context.Context) (key K, value V
 			return err
 		}
 
-		// var value V
-		err = msgpack.Unmarshal(vBytes, &value)
-		if err != nil {
-			return err
-		}
-
+		value = vBytes
 		ok = true
 		c.Delete(ctx, key)
 		return nil
@@ -313,6 +301,6 @@ func (c *mightyMapBadgerStorage[K, V]) Next(ctx context.Context) (key K, value V
 	return key, value, ok
 }
 
-func (c *mightyMapBadgerStorage[K, V]) Close(_ context.Context) error {
+func (c *mightyMapBadgerStorage[K]) Close(_ context.Context) error {
 	return c.db.Close()
 }

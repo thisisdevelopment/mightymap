@@ -11,7 +11,7 @@ import (
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
-type mightyMapRedisStorage[K comparable, V any] struct {
+type mightyMapRedisStorage[K comparable] struct {
 	redisClient *redis.Client
 	opts        *redisOpts
 }
@@ -44,10 +44,11 @@ func NewMightyMapRedisStorage[K comparable, V any](optfuncs ...OptionFuncRedis) 
 		}
 	}
 
-	return &mightyMapRedisStorage[K, V]{
+	storage := &mightyMapRedisStorage[K]{
 		redisClient: redis.NewClient(clientOpts),
 		opts:        opts,
 	}
+	return newMsgpackAdapter[K, V](storage)
 }
 
 func getDefaultRedisOptions() *redisOpts {
@@ -67,7 +68,7 @@ func getDefaultRedisOptions() *redisOpts {
 	return opts
 }
 
-func (c *mightyMapRedisStorage[K, V]) Store(ctx context.Context, key K, value V) {
+func (c *mightyMapRedisStorage[K]) Store(ctx context.Context, key K, value []byte) {
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
 		panic(err)
@@ -75,17 +76,12 @@ func (c *mightyMapRedisStorage[K, V]) Store(ctx context.Context, key K, value V)
 	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
 
-	valueBytes, err := msgpack.Marshal(value)
-	if err != nil {
-		panic(err)
-	}
-
-	if err := c.redisClient.Set(ctx, c.opts.prefix+string(keyBytes), valueBytes, c.opts.expire).Err(); err != nil {
+	if err := c.redisClient.Set(ctx, c.opts.prefix+string(keyBytes), value, c.opts.expire).Err(); err != nil {
 		panic(err)
 	}
 }
 
-func (c *mightyMapRedisStorage[K, V]) Load(ctx context.Context, key K) (value V, ok bool) {
+func (c *mightyMapRedisStorage[K]) Load(ctx context.Context, key K) (value []byte, ok bool) {
 	keyBytes, err := msgpack.Marshal(key)
 	if err != nil {
 		panic(err)
@@ -94,22 +90,17 @@ func (c *mightyMapRedisStorage[K, V]) Load(ctx context.Context, key K) (value V,
 	defer cancel()
 
 	v, err := c.redisClient.Get(ctx, c.opts.prefix+string(keyBytes)).Bytes()
-	var zeroV V
 	if err == redis.Nil {
-		return zeroV, false
+		return nil, false
 	}
 	if err != nil {
 		panic(err)
 	}
 
-	err = msgpack.Unmarshal(v, &value)
-	if err != nil {
-		panic(err)
-	}
-	return value, true
+	return v, true
 }
 
-func (c *mightyMapRedisStorage[K, V]) Delete(ctx context.Context, keys ...K) {
+func (c *mightyMapRedisStorage[K]) Delete(ctx context.Context, keys ...K) {
 	for _, key := range keys {
 		keyBytes, err := msgpack.Marshal(key)
 		if err != nil {
@@ -123,7 +114,7 @@ func (c *mightyMapRedisStorage[K, V]) Delete(ctx context.Context, keys ...K) {
 	}
 }
 
-func (c *mightyMapRedisStorage[K, V]) Clear(ctx context.Context) {
+func (c *mightyMapRedisStorage[K]) Clear(ctx context.Context) {
 	keys, err := c.scan(ctx, c.opts.prefix+"*")
 	if err != nil {
 		panic(err)
@@ -148,11 +139,11 @@ func (c *mightyMapRedisStorage[K, V]) Clear(ctx context.Context) {
 	}
 }
 
-func (c *mightyMapRedisStorage[K, V]) Close(_ context.Context) error {
+func (c *mightyMapRedisStorage[K]) Close(_ context.Context) error {
 	return c.redisClient.Close()
 }
 
-func (c *mightyMapRedisStorage[K, V]) Len(ctx context.Context) int {
+func (c *mightyMapRedisStorage[K]) Len(ctx context.Context) int {
 	keys, err := c.scan(ctx, c.opts.prefix+"*")
 	if err != nil {
 		panic(err)
@@ -160,8 +151,7 @@ func (c *mightyMapRedisStorage[K, V]) Len(ctx context.Context) int {
 	return len(keys)
 }
 
-func (c *mightyMapRedisStorage[K, V]) Next(ctx context.Context) (key K, value V, ok bool) {
-	var zeroV V
+func (c *mightyMapRedisStorage[K]) Next(ctx context.Context) (key K, value []byte, ok bool) {
 	var zeroK K
 
 	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
@@ -172,12 +162,12 @@ func (c *mightyMapRedisStorage[K, V]) Next(ctx context.Context) (key K, value V,
 		panic(err)
 	}
 	if len(keys) == 0 {
-		return zeroK, zeroV, false
+		return zeroK, nil, false
 	}
 
 	splitKey := strings.SplitN(keys[0], c.opts.prefix, 2)
 	if len(splitKey) != 2 {
-		return zeroK, zeroV, false
+		return zeroK, nil, false
 	}
 
 	var k K
@@ -185,22 +175,17 @@ func (c *mightyMapRedisStorage[K, V]) Next(ctx context.Context) (key K, value V,
 	if err != nil {
 		panic(err)
 	}
-	v, err := c.redisClient.Get(ctx, keys[0]).Result()
-	if err != nil {
-		panic(err)
-	}
-
-	err = msgpack.Unmarshal([]byte(v), &value)
+	v, err := c.redisClient.Get(ctx, keys[0]).Bytes()
 	if err != nil {
 		panic(err)
 	}
 
 	c.Delete(ctx, k)
 
-	return k, value, true
+	return k, v, true
 }
 
-func (c *mightyMapRedisStorage[K, V]) Range(ctx context.Context, f func(key K, value V) bool) {
+func (c *mightyMapRedisStorage[K]) Range(ctx context.Context, f func(key K, value []byte) bool) {
 	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
 
@@ -214,7 +199,7 @@ func (c *mightyMapRedisStorage[K, V]) Range(ctx context.Context, f func(key K, v
 			continue
 		}
 
-		vb, err := c.redisClient.Get(ctx, key).Result()
+		vb, err := c.redisClient.Get(ctx, key).Bytes()
 		if err != nil {
 			panic(err)
 		}
@@ -225,13 +210,7 @@ func (c *mightyMapRedisStorage[K, V]) Range(ctx context.Context, f func(key K, v
 			panic(err)
 		}
 
-		var v V
-		err = msgpack.Unmarshal([]byte(vb), &v)
-		if err != nil {
-			panic(err)
-		}
-
-		if !f(k, v) {
+		if !f(k, vb) {
 			break
 		}
 	}
@@ -239,7 +218,7 @@ func (c *mightyMapRedisStorage[K, V]) Range(ctx context.Context, f func(key K, v
 
 const defaultCursorSize int64 = 2048
 
-func (c *mightyMapRedisStorage[K, V]) scan(ctx context.Context, keyPattern string, maxKeys ...int) ([]string, error) {
+func (c *mightyMapRedisStorage[K]) scan(ctx context.Context, keyPattern string, maxKeys ...int) ([]string, error) {
 	max := defaultCursorSize
 	if len(maxKeys) > 0 {
 		max = int64(maxKeys[0])

@@ -1,6 +1,7 @@
 package mightymap_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/thisisdevelopment/mightymap"
@@ -9,6 +10,7 @@ import (
 
 func TestMightyMap_SwissStorage(t *testing.T) {
 	// Testing MightyMap with SwissMap storage implementation
+	ctx := context.Background()
 
 	store := storage.NewMightyMapSwissStorage[int, string]()
 	cm := mightymap.New[int, string](true, store)

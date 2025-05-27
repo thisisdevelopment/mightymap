@@ -1,6 +1,7 @@
 package mightymap_test
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -10,6 +11,7 @@ import (
 )
 
 func ExampleMap() {
+	ctx := context.Background()
 	cm := mightymap.New[int, string](true)
 	cm.Store(ctx, 1, "one")
 	fmt.Println(cm.Load(ctx, 1))
@@ -17,6 +19,7 @@ func ExampleMap() {
 }
 
 func ExampleMap_Load() {
+	ctx := context.Background()
 	// Using Badger storage
 	// Load example
 	cm := mightymap.New[int, string](true, storage.NewMightyMapBadgerStorage[int, string]())
@@ -26,6 +29,7 @@ func ExampleMap_Load() {
 }
 
 func ExampleMap_Next() {
+	ctx := context.Background()
 	// Using Badger storage
 	// Next example
 	cm := mightymap.New[int, string](true, storage.NewMightyMapBadgerStorage[int, string]())
@@ -35,6 +39,7 @@ func ExampleMap_Next() {
 }
 
 func ExampleMap_Range() {
+	ctx := context.Background()
 	cm := mightymap.New[int, string](true)
 	cm.Store(ctx, 1, "one")
 	cm.Store(ctx, 2, "two")
@@ -52,6 +57,7 @@ func ExampleMap_Range() {
 }
 
 func ExampleMap_Delete() {
+	ctx := context.Background()
 	cm := mightymap.New[int, string](true)
 	cm.Store(ctx, 1, "one")
 	cm.Store(ctx, 2, "two")
