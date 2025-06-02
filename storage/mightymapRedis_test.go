@@ -85,6 +85,7 @@ func TestMightyMapRedisStorageOptions(t *testing.T) {
 		store := NewMightyMapRedisStorage[string, int](
 			WithRedisMock(t),
 			WithRedisAddr("localhost:6379"),
+			WithRedisUsername("testuser"),
 			WithRedisPassword("password"),
 			WithRedisDB(1),
 			WithRedisPoolSize(10),
@@ -101,6 +102,22 @@ func TestMightyMapRedisStorageOptions(t *testing.T) {
 		value, ok := store.Load(ctx, "key1")
 		if !ok || value != 1 {
 			t.Errorf("Load() = %v, %v; want 1, true", value, ok)
+		}
+	})
+
+	// Test with username only
+	t.Run("Redis username option", func(t *testing.T) {
+		store := NewMightyMapRedisStorage[string, int](
+			WithRedisMock(t),
+			WithRedisUsername("myuser"),
+		)
+		defer store.Close(context.Background())
+
+		ctx := context.Background()
+		store.Store(ctx, "userkey", 42)
+		value, ok := store.Load(ctx, "userkey")
+		if !ok || value != 42 {
+			t.Errorf("Load() = %v, %v; want 42, true", value, ok)
 		}
 	})
 

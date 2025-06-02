@@ -27,6 +27,7 @@ func NewMightyMapRedisStorage[K comparable, V any](optfuncs ...OptionFuncRedis) 
 
 	clientOpts := &redis.Options{
 		Addr:       opts.addr,
+		Username:   opts.username,
 		Password:   opts.password,
 		DB:         opts.db,
 		PoolSize:   opts.poolSize,
@@ -54,6 +55,7 @@ func NewMightyMapRedisStorage[K comparable, V any](optfuncs ...OptionFuncRedis) 
 func getDefaultRedisOptions() *redisOpts {
 	opts := &redisOpts{
 		addr:       "localhost:6379",
+		username:   "",
 		password:   "",
 		db:         0,
 		poolSize:   3,

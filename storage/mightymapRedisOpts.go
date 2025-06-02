@@ -8,6 +8,7 @@ import (
 
 type redisOpts struct {
 	addr       string
+	username   string
 	password   string
 	db         int
 	poolSize   int
@@ -45,6 +46,16 @@ func WithRedisTimeout(timeout time.Duration) OptionFuncRedis {
 func WithRedisAddr(addr string) OptionFuncRedis {
 	return func(opts *redisOpts) {
 		opts.addr = addr
+	}
+}
+
+// WithRedisUsername sets the username for Redis authentication.
+// This is used for Redis ACL (Access Control List) authentication in Redis 6.0+.
+// For Redis servers that support username-based authentication, this username will be used
+// along with the password for authentication.
+func WithRedisUsername(username string) OptionFuncRedis {
+	return func(opts *redisOpts) {
+		opts.username = username
 	}
 }
 

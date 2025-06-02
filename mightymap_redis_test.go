@@ -2,6 +2,7 @@ package mightymap_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -121,6 +122,7 @@ func TestMightyMap_RedisStorage_Configuration(t *testing.T) {
 	t.Run("Custom Configuration", func(t *testing.T) {
 		store := storage.NewMightyMapRedisStorage[int, string](
 			storage.WithRedisAddr("localhost:6379"),
+			storage.WithRedisUsername("testuser"),
 			storage.WithRedisPassword(""),
 			storage.WithRedisDB(0),
 			storage.WithRedisPoolSize(10),
@@ -136,6 +138,26 @@ func TestMightyMap_RedisStorage_Configuration(t *testing.T) {
 		value, ok := cm.Load(ctx, 1)
 		if !ok || value != "one" {
 			t.Errorf("Expected to load 'one', got '%v'", value)
+		}
+
+		err := cm.Close(ctx)
+		if err != nil {
+			t.Errorf("Error closing map: %v", err)
+		}
+	})
+
+	t.Run("Redis ACL Authentication", func(t *testing.T) {
+		store := storage.NewMightyMapRedisStorage[int, string](
+			storage.WithRedisMock(t),
+			storage.WithRedisUsername("acl_user"),
+			storage.WithRedisPassword("acl_password"),
+		)
+		cm := mightymap.New[int, string](true, store)
+
+		cm.Store(ctx, 1, "acl_value")
+		value, ok := cm.Load(ctx, 1)
+		if !ok || value != "acl_value" {
+			t.Errorf("Expected to load 'acl_value', got '%v'", value)
 		}
 
 		err := cm.Close(ctx)
@@ -200,6 +222,7 @@ func TestMightyMap_RedisStorage_Concurrency(t *testing.T) {
 	})
 }
 
+// Session is an example struct for testing complex object storage
 type Session struct {
 	UserID string
 }
@@ -230,4 +253,67 @@ func TestMightyMap_RedisStorage_ComplexObjects(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error closing map: %v", err)
 	}
+}
+
+// ExampleNewMightyMapRedisStorage demonstrates Redis username authentication configuration
+func ExampleNewMightyMapRedisStorage() {
+	// Configure Redis storage with username authentication (Redis 6.0+ ACL)
+	store := storage.NewMightyMapRedisStorage[string, string](
+		storage.WithRedisUsername("myuser"),
+		storage.WithRedisPassword("mypassword"),
+		storage.WithRedisAddr("localhost:6379"),
+	)
+
+	mm := mightymap.New[string, string](true, store)
+	defer mm.Close(context.Background())
+
+	fmt.Println("Redis storage configured with username authentication")
+
+	// Output: Redis storage configured with username authentication
+}
+
+// Example showing different Redis authentication configurations
+func Example_redisAuthenticationOptions() {
+	ctx := context.Background()
+
+	// Example 1: No authentication (development/local Redis)
+	store1 := storage.NewMightyMapRedisStorage[string, int](
+	// No authentication options needed for local development
+	)
+	mm1 := mightymap.New[string, int](true, store1)
+	mm1.Store(ctx, "key1", 100)
+	defer mm1.Close(ctx)
+
+	// Example 2: Password-only authentication (legacy Redis < 6.0)
+	store2 := storage.NewMightyMapRedisStorage[string, int](
+		storage.WithRedisPassword("your-redis-password"),
+	)
+	mm2 := mightymap.New[string, int](true, store2)
+	mm2.Store(ctx, "key2", 200)
+	defer mm2.Close(ctx)
+
+	// Example 3: Username + Password authentication (Redis 6.0+ ACL)
+	store3 := storage.NewMightyMapRedisStorage[string, int](
+		storage.WithRedisUsername("app-user"),        // ACL username
+		storage.WithRedisPassword("secure-password"), // ACL password
+		storage.WithRedisDB(1),                       // Use database 1
+	)
+	mm3 := mightymap.New[string, int](true, store3)
+	mm3.Store(ctx, "key3", 300)
+	defer mm3.Close(ctx)
+
+	// Example 4: Full production configuration with username
+	store4 := storage.NewMightyMapRedisStorage[string, string](
+		storage.WithRedisAddr("redis.example.com:6379"),  // Production Redis address
+		storage.WithRedisUsername("production-user"),     // Production ACL user
+		storage.WithRedisPassword("production-password"), // Production ACL password
+		storage.WithRedisDB(2),                           // Dedicated database
+		storage.WithRedisTLS(true),                       // Enable TLS encryption
+		storage.WithRedisPoolSize(20),                    // Connection pool size
+		storage.WithRedisTimeout(10*time.Second),         // Operation timeout
+		storage.WithRedisPrefix("myapp:"),                // Key prefix for namespacing
+	)
+	mm4 := mightymap.New[string, string](true, store4)
+	mm4.Store(ctx, "session:user123", "session-data")
+	defer mm4.Close(ctx)
 }
