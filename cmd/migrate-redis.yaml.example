@@ -1,0 +1,150 @@
+# MightyMap Redis Migration Configuration
+# Copy this file to migrate-redis.yaml and customize for your migration
+
+# Source Redis configuration (v0.4.5 legacy format)
+source:
+  # Redis server address
+  addr: "localhost:6379"
+  
+  # Redis authentication (Redis 6.0+ ACL support)
+  username: ""
+  password: ""
+  
+  # Redis database number
+  db: 0
+  
+  # Connection pool settings
+  pool_size: 3
+  max_retries: 3
+  
+  # Use TLS connection
+  tls: false
+  
+  # Key prefix for legacy data
+  prefix: "mightymap_legacy_"
+  
+  # Operation timeout
+  timeout: 5s
+  
+  # Key expiration (0 = no expiration)
+  expire: 0
+
+# Target Redis configuration (v0.5.0 MessagePack format)  
+target:
+  # Redis server address (can be same or different server)
+  addr: "localhost:6379"
+  
+  # Redis authentication 
+  username: ""
+  password: ""
+  
+  # ⚠️  IMPORTANT: Use different DB number to avoid conflicts
+  db: 1
+  
+  # Connection pool settings
+  pool_size: 3
+  max_retries: 3
+  
+  # Use TLS connection
+  tls: false
+  
+  # Key prefix for migrated data
+  prefix: "mightymap_v05_"
+  
+  # Operation timeout
+  timeout: 5s
+  
+  # Key expiration (0 = no expiration)
+  expire: 0
+
+# Migration process configuration
+migration:
+  # Number of keys to process before taking a small pause
+  batch_size: 1000
+  
+  # Log progress every N keys
+  log_interval: 100
+  
+  # Create backup of original data before migration
+  backup_original: true
+  
+  # Maximum time allowed for migration (0 = no timeout)
+  timeout: 30m
+  
+  # Filter keys to migrate (* = all keys, or specific pattern)
+  # Examples:
+  # "*" - migrate all keys
+  # "user:*" - migrate only keys starting with "user:"
+  # "session" - migrate only exact key "session"
+  key_pattern: "*"
+  
+  # Source key prefix to match (leave empty to use source.prefix)
+  source_prefix: "mightymap_legacy_"
+  
+  # Target key prefix to apply (leave empty to use target.prefix)
+  target_prefix: "mightymap_v05_"
+
+# Example configurations for different scenarios:
+
+# Scenario 1: Same Redis server, different databases
+# source:
+#   db: 0
+#   prefix: "old_"
+# target:
+#   db: 1  
+#   prefix: "new_"
+
+# Scenario 2: Different Redis servers
+# source:
+#   addr: "redis-legacy.example.com:6379"
+#   username: "legacy_user"
+#   password: "legacy_pass"
+# target:
+#   addr: "redis-new.example.com:6379"
+#   username: "new_user"
+#   password: "new_pass"
+
+# Scenario 3: Redis Cluster with TLS
+# source:
+#   addr: "redis-cluster.example.com:6380"
+#   tls: true
+#   username: "cluster_user"
+#   password: "cluster_pass"
+# target:
+#   addr: "redis-cluster.example.com:6380"
+#   tls: true
+#   username: "cluster_user"
+#   password: "cluster_pass"
+#   db: 1
+
+# Scenario 4: Selective migration with prefix transformation
+# migration:
+#   key_pattern: "user:*"
+#   source_prefix: "app1_"
+#   target_prefix: "app2_"
+#   batch_size: 500
+
+# Scenario 5: Large dataset migration
+# migration:
+#   batch_size: 5000
+#   log_interval: 1000
+#   timeout: 2h
+
+# Scenario 6: Local development migration
+# source:
+#   addr: "localhost:6379"
+#   db: 0
+#   prefix: "dev_legacy_"
+# target:
+#   addr: "localhost:6379"
+#   db: 2
+#   prefix: "dev_new_"
+# migration:
+#   batch_size: 100
+#   timeout: 5m
+
+# Security Notes:
+# - Always use different target database/prefix to avoid data loss
+# - Consider using Redis AUTH or ACL for production environments
+# - Enable TLS for network security in production
+# - Test with dry-run mode first: --dry-run --verbose 

@@ -1,0 +1,109 @@
+# MightyMap BadgerDB Migration Configuration
+# Copy this file to migrate-badger.yaml and customize for your migration
+
+# Source BadgerDB configuration (v0.4.5 legacy format)
+source:
+  # Directory containing the legacy BadgerDB data
+  dir: "./data/badger-legacy"
+  
+  # Use in-memory storage (false = persistent disk storage)
+  memory_storage: false
+  
+  # Compression enabled in legacy database
+  compression: false
+  
+  # Number of compactor goroutines (0 = use BadgerDB default)
+  num_compactors: 0
+  
+  # Number of versions to keep for each key
+  num_versions_to_keep: 1
+  
+  # Cache sizes (bytes, 0 = use BadgerDB defaults)
+  index_cache_size: 0
+  block_cache_size: 0
+  
+  # Block size for SSTable creation
+  block_size: 4096
+  
+  # Memory table size before flushing to disk
+  mem_table_size: 67108864  # 64MB
+  
+  # Threshold for storing values in value log vs LSM tree
+  value_threshold: 1024
+  
+  # Sync writes to disk (slower but safer)
+  sync_writes: false
+  
+  # Encryption settings (leave empty if not used)
+  encryption_key: ""
+  encryption_key_rotation: 24h
+
+# Target BadgerDB configuration (v0.5.0 MessagePack format)
+target:
+  # Directory for the migrated BadgerDB data
+  # ⚠️  IMPORTANT: Use a different directory to avoid data loss
+  dir: "./data/badger-migrated"
+  
+  # Use in-memory storage (false = persistent disk storage)
+  memory_storage: false
+  
+  # Enable compression for new format (recommended)
+  compression: true
+  
+  # Optimized settings for new database
+  num_compactors: 0
+  num_versions_to_keep: 1
+  index_cache_size: 0
+  block_cache_size: 0
+  block_size: 4096
+  mem_table_size: 67108864
+  value_threshold: 1024
+  sync_writes: false
+  
+  # Encryption settings (can be different from source)
+  encryption_key: ""
+  encryption_key_rotation: 24h
+
+# Migration process configuration
+migration:
+  # Number of keys to process before taking a small pause
+  batch_size: 1000
+  
+  # Log progress every N keys
+  log_interval: 100
+  
+  # Create backup of original data before migration
+  backup_original: true
+  
+  # Maximum time allowed for migration (0 = no timeout)
+  timeout: 30m
+  
+  # Filter keys to migrate (* = all keys, or specific pattern)
+  # Examples:
+  # "*" - migrate all keys
+  # "user:*" - migrate only keys starting with "user:"
+  # "session" - migrate only exact key "session"
+  key_pattern: "*"
+
+# Example configurations for different scenarios:
+
+# Scenario 1: Large database migration
+# migration:
+#   batch_size: 5000
+#   log_interval: 1000
+#   timeout: 2h
+
+# Scenario 2: Selective migration of user data only
+# migration:
+#   key_pattern: "user:*"
+#   batch_size: 500
+#   log_interval: 50
+
+# Scenario 3: Memory-constrained migration
+# source:
+#   memory_storage: true
+# target:
+#   memory_storage: true
+# migration:
+#   batch_size: 100
+#   timeout: 10m 
