@@ -94,6 +94,10 @@ run_test_file "mightymap_badger_test.go" "Badger storage tests" || overall_statu
 run_test_file "mightymap_swiss_test.go" "Swiss storage tests" || overall_status=1
 run_test_file "mightymap_redis_test.go" "Redis storage tests" || overall_status=1
 
+# Run storage package tests
+echo -e "\n${BLUE}Running storage package tests...${NC}"
+run_test "go test -v ./storage -run='^Test[^Fuzz]'" "storage package tests" || overall_status=1
+
 # Run unit tests
 echo -e "\n${BLUE}Running unit tests...${NC}"
 run_test_file "mightymapStore_unit_test.go" "unit tests" || overall_status=1
@@ -105,6 +109,11 @@ run_test_file "mightymap_concurency_test.go" "concurrency tests" || overall_stat
 # Skip fuzzing tests
 echo -e "\n${YELLOW}Skipping fuzz tests${NC}"
 test_names+=("fuzz tests")
+test_results+=("SKIP")
+
+# Skip benchmark tests (can be run separately with -bench flag)
+echo -e "\n${YELLOW}Skipping benchmark tests${NC}"
+test_names+=("benchmark tests")
 test_results+=("SKIP")
 
 # Show coverage (only if previous tests passed)

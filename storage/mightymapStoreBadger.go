@@ -57,22 +57,24 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 		badgerOpts = badgerOpts.WithCompression(options.None)
 	}
 
-	// const (
-	// 	DEBUG loggingLevel = iota
-	// 	INFO
-	// 	WARNING
-	// 	ERROR
-	// )
+	// Logging level constants for BadgerDB
+	const (
+		loggingLevelDebug   = 0
+		loggingLevelInfo    = 1
+		loggingLevelWarning = 2
+		loggingLevelError   = 3
+	)
+
 	// we have to proxy this, badger hides its internal type
 	loggingLevel := badger.ERROR
 	switch opts.loggingLevel {
-	case 0:
+	case loggingLevelDebug:
 		loggingLevel = badger.DEBUG
-	case 1:
+	case loggingLevelInfo:
 		loggingLevel = badger.INFO
-	case 2:
+	case loggingLevelWarning:
 		loggingLevel = badger.WARNING
-	case 3:
+	case loggingLevelError:
 		loggingLevel = badger.ERROR
 	}
 

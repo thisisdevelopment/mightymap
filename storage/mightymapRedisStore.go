@@ -11,6 +11,23 @@ import (
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
+const (
+	// defaultRedisPoolSize is the default number of connections in the Redis connection pool
+	defaultRedisPoolSize = 3
+	// defaultRedisMaxRetries is the default number of retries for Redis operations
+	defaultRedisMaxRetries = 3
+	// defaultRedisTimeout is the default timeout for Redis operations
+	defaultRedisTimeout = 5 * time.Second
+	// defaultRedisCursorSize is the default cursor size for Redis SCAN operations
+	defaultRedisCursorSize int64 = 2048
+	// redisPrefixSplitExpectedParts is the expected number of parts when splitting Redis keys by prefix
+	redisPrefixSplitExpectedParts = 2
+	// redisScanSingleKey is the count parameter for scanning a single key
+	redisScanSingleKey = 1
+	// defaultRedisAddr is the default Redis server address
+	defaultRedisAddr = "localhost:6379"
+)
+
 type mightyMapRedisStorage[K comparable] struct {
 	redisClient *redis.Client
 	opts        *redisOpts
@@ -54,16 +71,16 @@ func NewMightyMapRedisStorage[K comparable, V any](optfuncs ...OptionFuncRedis) 
 
 func getDefaultRedisOptions() *redisOpts {
 	opts := &redisOpts{
-		addr:       "localhost:6379",
+		addr:       defaultRedisAddr,
 		username:   "",
 		password:   "",
 		db:         0,
-		poolSize:   3,
-		maxRetries: 3,
+		poolSize:   defaultRedisPoolSize,
+		maxRetries: defaultRedisMaxRetries,
 		tls:        false,
 		tlsConfig:  nil,
 		prefix:     "mightymap_",
-		timeout:    5 * time.Second,
+		timeout:    defaultRedisTimeout,
 		expire:     0,
 	}
 
@@ -125,7 +142,7 @@ func (c *mightyMapRedisStorage[K]) Clear(ctx context.Context) {
 	var kkeys []K
 	for _, key := range keys {
 		keySplit := strings.SplitN(key, c.opts.prefix, 2)
-		if len(keySplit) != 2 {
+		if len(keySplit) != redisPrefixSplitExpectedParts {
 			continue
 		}
 		var k K
@@ -159,7 +176,7 @@ func (c *mightyMapRedisStorage[K]) Next(ctx context.Context) (key K, value []byt
 	ctx, cancel := context.WithTimeout(ctx, c.opts.timeout)
 	defer cancel()
 
-	keys, err := c.scan(ctx, c.opts.prefix+"*", 1)
+	keys, err := c.scan(ctx, c.opts.prefix+"*", redisScanSingleKey)
 	if err != nil {
 		panic(err)
 	}
@@ -168,7 +185,7 @@ func (c *mightyMapRedisStorage[K]) Next(ctx context.Context) (key K, value []byt
 	}
 
 	splitKey := strings.SplitN(keys[0], c.opts.prefix, 2)
-	if len(splitKey) != 2 {
+	if len(splitKey) != redisPrefixSplitExpectedParts {
 		return zeroK, nil, false
 	}
 
@@ -197,7 +214,7 @@ func (c *mightyMapRedisStorage[K]) Range(ctx context.Context, f func(key K, valu
 	}
 	for _, key := range keys {
 		splitKey := strings.SplitN(key, c.opts.prefix, 2)
-		if len(splitKey) != 2 {
+		if len(splitKey) != redisPrefixSplitExpectedParts {
 			continue
 		}
 
@@ -227,7 +244,7 @@ func (c *mightyMapRedisStorage[K]) Keys(ctx context.Context) []K {
 	var kkeys []K
 	for _, key := range keys {
 		keySplit := strings.SplitN(key, c.opts.prefix, 2)
-		if len(keySplit) != 2 {
+		if len(keySplit) != redisPrefixSplitExpectedParts {
 			continue
 		}
 		var k K
@@ -240,10 +257,8 @@ func (c *mightyMapRedisStorage[K]) Keys(ctx context.Context) []K {
 	return kkeys
 }
 
-const defaultCursorSize int64 = 2048
-
 func (c *mightyMapRedisStorage[K]) scan(ctx context.Context, keyPattern string, maxKeys ...int) ([]string, error) {
-	max := defaultCursorSize
+	max := defaultRedisCursorSize
 	if len(maxKeys) > 0 {
 		max = int64(maxKeys[0])
 	}

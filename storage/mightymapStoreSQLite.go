@@ -15,6 +15,11 @@ import (
 	msgpack "github.com/vmihailenco/msgpack/v5"
 )
 
+const (
+	// sqliteDirPermissions is the default permissions for creating SQLite database directories
+	sqliteDirPermissions = 0o755
+)
+
 // mightyMapSQLiteStorage is the SQLite implementation of byteStorage interface
 type mightyMapSQLiteStorage[K comparable] struct {
 	db            *sql.DB
@@ -78,7 +83,7 @@ func NewMightyMapSQLiteStorage[K comparable, V any](optfuncs ...OptionFuncSQLite
 		dsn = ":memory:"
 	} else {
 		// Ensure directory exists
-		if err := os.MkdirAll(filepath.Dir(opts.dbPath), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(opts.dbPath), sqliteDirPermissions); err != nil {
 			panic(fmt.Errorf("failed to create directory for SQLite database: %w", err))
 		}
 		dsn = opts.dbPath

@@ -8,6 +8,27 @@ import (
 	"github.com/dgraph-io/badger/v4"
 )
 
+const (
+	// Memory size constants for BadgerDB configuration
+	badgerDefaultIndexCacheSize = 128 << 20 // 128 MB
+	badgerDefaultBlockCacheSize = 512 << 20 // 512 MB
+	badgerDefaultMemTableSize   = 64 << 20  // 64 MB
+	badgerDefaultValueThreshold = 1 << 20   // 1 MB
+	badgerDefaultBlockSize      = 16 * 1024 // 16 KB
+
+	// BadgerDB tuning constants
+	badgerDefaultNumCompactors    = 4
+	badgerDefaultGCInterval       = 10 * time.Second
+	badgerDefaultGCPercentage     = 0.5
+	badgerDefaultKeyRotationDays  = 10
+	badgerDefaultNumVersionsToKeep = 1
+
+	// Encryption key valid lengths
+	encryptionKeyLength16 = 16
+	encryptionKeyLength24 = 24
+	encryptionKeyLength32 = 32
+)
+
 type badgerOpts struct {
 	dir                   string
 	memoryStorage         bool
@@ -34,20 +55,20 @@ func getDefaultBadgerOptions() *badgerOpts {
 		dir:                   os.TempDir() + fmt.Sprintf("/badger-%d", time.Now().UnixNano()),
 		compression:           false,
 		memoryStorage:         true,
-		numCompactors:         4,
-		numVersionsToKeep:     1,
-		indexCacheSize:        int64(128 << 20),
-		blockCacheSize:        512 << 20,
-		blockSize:             16 * 1024,
+		numCompactors:         badgerDefaultNumCompactors,
+		numVersionsToKeep:     badgerDefaultNumVersionsToKeep,
+		indexCacheSize:        int64(badgerDefaultIndexCacheSize),
+		blockCacheSize:        badgerDefaultBlockCacheSize,
+		blockSize:             badgerDefaultBlockSize,
 		loggingLevel:          int(badger.ERROR),
 		metricsEnabled:        true,
 		detectConflicts:       true,
-		gcInterval:            10 * time.Second,
-		gcPercentage:          0.5,
-		memTableSize:          64 << 20,
-		valueThreshold:        1 << 20,
+		gcInterval:            badgerDefaultGCInterval,
+		gcPercentage:          badgerDefaultGCPercentage,
+		memTableSize:          badgerDefaultMemTableSize,
+		valueThreshold:        badgerDefaultValueThreshold,
 		encryptionKey:         "",
-		encryptionKeyRotation: 10 * 24 * time.Hour, // 10 days default
+		encryptionKeyRotation: badgerDefaultKeyRotationDays * 24 * time.Hour, // 10 days default
 		syncWrites:            false,
 	}
 }
@@ -181,7 +202,7 @@ func WithValueThreshold(valueThreshold int64) OptionFuncBadger {
 // WithEncryptionKey sets the encryption key for the Badger database.
 func WithEncryptionKey(encryptionKey string) OptionFuncBadger {
 	// During OpenKeyRegistry error: Encryption key's length should beeither 16, 24, or 32 bytes
-	if len(encryptionKey) != 16 && len(encryptionKey) != 24 && len(encryptionKey) != 32 {
+	if len(encryptionKey) != encryptionKeyLength16 && len(encryptionKey) != encryptionKeyLength24 && len(encryptionKey) != encryptionKeyLength32 {
 		panic(fmt.Sprintf("Encryption key's length should be either 16, 24, or 32 bytes current length: %d", len(encryptionKey)))
 	}
 
