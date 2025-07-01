@@ -104,6 +104,17 @@ func (c *mightyMapSwissStorage[K]) Range(_ context.Context, f func(key K, value 
 	})
 }
 
+func (c *mightyMapSwissStorage[K]) Keys(_ context.Context) []K {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	keys := []K{}
+	c.data.Iter(func(k K, v []byte) bool {
+		keys = append(keys, k)
+		return false // Continue iteration (based on Range method pattern)
+	})
+	return keys
+}
+
 func (c *mightyMapSwissStorage[K]) Len(_ context.Context) int {
 	c.mutex.RLock()
 	defer c.mutex.RUnlock()

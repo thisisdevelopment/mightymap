@@ -73,6 +73,40 @@ func TestMightyMapDefaultStorage(t *testing.T) {
 			t.Errorf("Next() = %v, %v, %v; want key7, 7, true", key, value, ok)
 		}
 	})
+
+	// Test Keys
+	t.Run("Keys", func(t *testing.T) {
+		store.Clear(ctx)
+		store.Store(ctx, "key8", 8)
+		store.Store(ctx, "key9", 9)
+		store.Store(ctx, "key10", 10)
+
+		keys := store.Keys(ctx)
+		if len(keys) != 3 {
+			t.Errorf("Keys() returned %d keys; want 3", len(keys))
+		}
+
+		// Verify all expected keys are present
+		keyMap := make(map[string]bool)
+		for _, key := range keys {
+			keyMap[key] = true
+		}
+		expectedKeys := []string{"key8", "key9", "key10"}
+		for _, expected := range expectedKeys {
+			if !keyMap[expected] {
+				t.Errorf("Expected key %s not found in Keys() result", expected)
+			}
+		}
+	})
+
+	// Test Keys with empty store
+	t.Run("Keys empty store", func(t *testing.T) {
+		store.Clear(ctx)
+		keys := store.Keys(ctx)
+		if len(keys) != 0 {
+			t.Errorf("Keys() returned %d keys for empty store; want 0", len(keys))
+		}
+	})
 }
 
 func TestMightyMapDefaultStorageConcurrent(t *testing.T) {
@@ -345,6 +379,40 @@ func TestMightyMapByteStorage(t *testing.T) {
 		err := store.Close(ctx)
 		if err != nil {
 			t.Errorf("Close() returned error: %v", err)
+		}
+	})
+
+	// Test Keys for byte storage
+	t.Run("Byte Keys", func(t *testing.T) {
+		store.Clear(ctx)
+		store.Store(ctx, "key6", []byte("data6"))
+		store.Store(ctx, "key7", []byte("data7"))
+		store.Store(ctx, "key8", []byte("data8"))
+
+		keys := store.Keys(ctx)
+		if len(keys) != 3 {
+			t.Errorf("Keys() returned %d keys; want 3", len(keys))
+		}
+
+		// Verify all expected keys are present
+		keyMap := make(map[string]bool)
+		for _, key := range keys {
+			keyMap[key] = true
+		}
+		expectedKeys := []string{"key6", "key7", "key8"}
+		for _, expected := range expectedKeys {
+			if !keyMap[expected] {
+				t.Errorf("Expected key %s not found in Keys() result", expected)
+			}
+		}
+	})
+
+	// Test Keys with empty byte storage
+	t.Run("Byte Keys empty store", func(t *testing.T) {
+		store.Clear(ctx)
+		keys := store.Keys(ctx)
+		if len(keys) != 0 {
+			t.Errorf("Keys() returned %d keys for empty store; want 0", len(keys))
 		}
 	})
 }

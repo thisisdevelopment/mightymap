@@ -228,6 +228,38 @@ func (c *mightyMapBadgerStorage[K]) Range(_ context.Context, f func(key K, value
 	}
 }
 
+func (c *mightyMapBadgerStorage[K]) Keys(_ context.Context) []K {
+	keys := []K{}
+	err := c.db.View(func(txn *badger.Txn) error {
+		opts := badger.IteratorOptions{
+			PrefetchValues: false,
+			Reverse:        false,
+			AllVersions:    false,
+		}
+
+		it := txn.NewIterator(opts)
+		defer it.Close()
+
+		for it.Rewind(); it.Valid(); it.Next() {
+			item := it.Item()
+			kBytes := item.Key()
+			var k K
+			err := msgpack.Unmarshal(kBytes, &k)
+			if err != nil {
+				log.Printf("error: unmarshalling key: '%v' err: %v", string(kBytes), err)
+				continue
+			}
+
+			keys = append(keys, k)
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	return keys
+}
+
 func (c *mightyMapBadgerStorage[K]) Len(_ context.Context) int {
 	if !c.initLenCall.Load() {
 		c.initLenCall.Store(true)

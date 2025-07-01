@@ -93,4 +93,36 @@ func TestMightyMap_DefaultStorage(t *testing.T) {
 			t.Errorf("Expected map to be cleared")
 		}
 	})
+
+	t.Run("Keys", func(t *testing.T) {
+		cm.Clear(ctx)
+		cm.Store(ctx, 10, "ten")
+		cm.Store(ctx, 20, "twenty")
+		cm.Store(ctx, 30, "thirty")
+
+		keys := cm.Keys(ctx)
+		if len(keys) != 3 {
+			t.Errorf("Expected 3 keys, got %d", len(keys))
+		}
+
+		// Verify all expected keys are present
+		keyMap := make(map[int]bool)
+		for _, key := range keys {
+			keyMap[key] = true
+		}
+		expectedKeys := []int{10, 20, 30}
+		for _, expected := range expectedKeys {
+			if !keyMap[expected] {
+				t.Errorf("Expected key %d not found in Keys() result", expected)
+			}
+		}
+	})
+
+	t.Run("Keys empty map", func(t *testing.T) {
+		cm.Clear(ctx)
+		keys := cm.Keys(ctx)
+		if len(keys) != 0 {
+			t.Errorf("Expected empty keys list, got %d keys", len(keys))
+		}
+	})
 }

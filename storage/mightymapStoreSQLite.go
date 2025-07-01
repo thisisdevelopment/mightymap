@@ -280,6 +280,37 @@ func (s *mightyMapSQLiteStorage[K]) Range(_ context.Context, f func(key K, value
 	}
 }
 
+func (s *mightyMapSQLiteStorage[K]) Keys(_ context.Context) []K {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	query := fmt.Sprintf("SELECT key FROM %s", s.getTableName())
+	rows, err := s.db.Query(query)
+	if err != nil {
+		fmt.Printf("Error querying SQLite for keys: %v\n", err)
+		return []K{}
+	}
+	defer rows.Close()
+
+	keys := []K{}
+	for rows.Next() {
+		var keyBytes []byte
+		if err := rows.Scan(&keyBytes); err != nil {
+			fmt.Printf("Error scanning row in keys: %v\n", err)
+			continue
+		}
+
+		var key K
+		if err := msgpack.Unmarshal(keyBytes, &key); err != nil {
+			fmt.Printf("Error unmarshalling key in keys: %v\n", err)
+			continue
+		}
+		keys = append(keys, key)
+	}
+
+	return keys
+}
+
 // Next retrieves and removes the next key-value pair from the SQLite storage.
 func (s *mightyMapSQLiteStorage[K]) Next(ctx context.Context) (key K, value []byte, ok bool) {
 	s.mutex.Lock()

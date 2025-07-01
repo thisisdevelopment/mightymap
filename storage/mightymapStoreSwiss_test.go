@@ -72,6 +72,46 @@ func TestMightyMapSwissStorage(t *testing.T) {
 			t.Errorf("Next() = %v, %v, %v; want key7, 7, true", key, value, ok)
 		}
 	})
+
+	// Test Keys
+	t.Run("Keys", func(t *testing.T) {
+		// Create a fresh store for this test to avoid interference from other tests
+		freshStore := NewMightyMapSwissStorage[string, int]()
+		defer freshStore.Close(context.Background())
+
+		freshStore.Store(ctx, "key8", 8)
+		freshStore.Store(ctx, "key9", 9)
+		freshStore.Store(ctx, "key10", 10)
+
+		keys := freshStore.Keys(ctx)
+		if len(keys) != 3 {
+			t.Errorf("Keys() returned %d keys; want 3", len(keys))
+		}
+
+		// Verify all expected keys are present
+		keyMap := make(map[string]bool)
+		for _, key := range keys {
+			keyMap[key] = true
+		}
+		expectedKeys := []string{"key8", "key9", "key10"}
+		for _, expected := range expectedKeys {
+			if !keyMap[expected] {
+				t.Errorf("Expected key %s not found in Keys() result", expected)
+			}
+		}
+	})
+
+	// Test Keys with empty store
+	t.Run("Keys empty store", func(t *testing.T) {
+		// Create a fresh store for this test to avoid interference from other tests
+		emptyStore := NewMightyMapSwissStorage[string, int]()
+		defer emptyStore.Close(context.Background())
+
+		keys := emptyStore.Keys(ctx)
+		if len(keys) != 0 {
+			t.Errorf("Keys() returned %d keys for empty store; want 0", len(keys))
+		}
+	})
 }
 
 func TestMightyMapSwissStorageOptions(t *testing.T) {

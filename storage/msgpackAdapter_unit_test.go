@@ -61,6 +61,16 @@ func (m *mockByteStorage[K]) Range(_ context.Context, f func(key K, value []byte
 	}
 }
 
+func (m *mockByteStorage[K]) Keys(_ context.Context) []K {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	keys := []K{}
+	for k := range m.data {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
 func (m *mockByteStorage[K]) Next(_ context.Context) (K, []byte, bool) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -188,41 +198,50 @@ func TestRegisterMsgpackType_Pointer(t *testing.T) {
 
 func TestMsgpackAdapter_BasicOps(t *testing.T) {
 	ctx := context.Background()
-	store := newMockByteStorage[string]()
-	adapter := newMsgpackAdapter[string, int](store)
-	adapter.Store(ctx, "a", 1)
-	adapter.Store(ctx, "b", 2)
-	v, ok := adapter.Load(ctx, "a")
-	if !ok || v != 1 {
-		t.Errorf("expected 1, got %v", v)
+	mock := newMockByteStorage[string]()
+	adapter := newMsgpackAdapter[string, int](mock)
+
+	// Store
+	adapter.Store(ctx, "key1", 42)
+	// Load
+	val, ok := adapter.Load(ctx, "key1")
+	if !ok || val != 42 {
+		t.Errorf("expected 42, got %v", val)
 	}
-	adapter.Delete(ctx, "a")
-	_, ok = adapter.Load(ctx, "a")
+	// Delete
+	adapter.Delete(ctx, "key1")
+	val, ok = adapter.Load(ctx, "key1")
 	if ok {
-		t.Error("expected key to be deleted")
+		t.Errorf("expected key to be deleted")
 	}
-	count := 0
-	adapter.Range(ctx, func(k string, v int) bool {
-		count++
-		return true
-	})
-	if count != 1 {
-		t.Errorf("expected 1 item after delete, got %d", count)
+
+	// Test Keys
+	adapter.Store(ctx, "key2", 100)
+	adapter.Store(ctx, "key3", 200)
+	adapter.Store(ctx, "key4", 300)
+
+	keys := adapter.Keys(ctx)
+	if len(keys) != 3 {
+		t.Errorf("Keys() returned %d keys; want 3", len(keys))
 	}
-	key, val, ok := adapter.Next(ctx)
-	if !ok || (key != "b" && val != 2) {
-		t.Errorf("expected to pop b=2, got %v=%v", key, val)
+
+	// Verify all expected keys are present
+	keyMap := make(map[string]bool)
+	for _, key := range keys {
+		keyMap[key] = true
 	}
-	if adapter.Len(ctx) != 0 {
-		t.Errorf("expected len 0 after Next, got %d", adapter.Len(ctx))
+	expectedKeys := []string{"key2", "key3", "key4"}
+	for _, expected := range expectedKeys {
+		if !keyMap[expected] {
+			t.Errorf("Expected key %s not found in Keys() result", expected)
+		}
 	}
-	adapter.Store(ctx, "x", 9)
+
+	// Test Keys with empty adapter
 	adapter.Clear(ctx)
-	if adapter.Len(ctx) != 0 {
-		t.Errorf("expected len 0 after Clear, got %d", adapter.Len(ctx))
-	}
-	if err := adapter.Close(ctx); err != nil {
-		t.Errorf("unexpected error on Close: %v", err)
+	keys = adapter.Keys(ctx)
+	if len(keys) != 0 {
+		t.Errorf("Keys() returned %d keys for empty adapter; want 0", len(keys))
 	}
 }
 

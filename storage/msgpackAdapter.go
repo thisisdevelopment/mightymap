@@ -222,6 +222,11 @@ func (m *msgpackAdapter[K, V]) Range(ctx context.Context, f func(key K, value V)
 	})
 }
 
+// Keys returns all keys in the storage in an unspecified order.
+func (m *msgpackAdapter[K, V]) Keys(ctx context.Context) []K {
+	return m.storage.Keys(ctx)
+}
+
 // Next returns the next key-value pair from the storage
 func (m *msgpackAdapter[K, V]) Next(ctx context.Context) (key K, value V, ok bool) {
 	var zeroV V

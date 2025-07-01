@@ -102,6 +102,11 @@ func (m *Map[K, V]) Range(ctx context.Context, f func(key K, value V) bool) {
 	m.storage.Range(ctx, f)
 }
 
+// Keys returns all keys in the map in an unspecified order.
+func (m *Map[K, V]) Keys(ctx context.Context) []K {
+	return m.storage.Keys(ctx)
+}
+
 // Pop retrieves and removes a value from the map.
 // Returns the value and true if found, zero value and false if not present.
 func (m *Map[K, V]) Pop(ctx context.Context, key K) (value V, ok bool) {

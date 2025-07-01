@@ -30,6 +30,9 @@ type IMightyMapStorage[K comparable, V any] interface {
 	// If the function returns false, iteration stops early.
 	Range(ctx context.Context, f func(key K, value V) bool)
 
+	// Keys returns all keys in storage in an unspecified order.
+	Keys(ctx context.Context) []K
+
 	// Next returns and removes the next key-value pair from storage.
 	// The iteration order is not specified and may vary between implementations.
 	// Returns zero values and false when storage is empty.
@@ -67,6 +70,9 @@ type byteStorage[K comparable] interface {
 
 	// Range iterates over all key-byte value pairs in storage.
 	Range(ctx context.Context, f func(key K, value []byte) bool)
+
+	// Keys returns all keys in storage in an unspecified order.
+	Keys(ctx context.Context) []K
 
 	// Next returns and removes the next key-byte value pair from storage.
 	Next(ctx context.Context) (key K, value []byte, ok bool)
@@ -182,6 +188,18 @@ func (c *mightyMapDirectStorage[K, V]) Range(_ context.Context, f func(key K, va
 			break
 		}
 	}
+}
+
+// Keys returns all keys in the direct storage in an unspecified order.
+// This operation uses a read lock to ensure data consistency during traversal.
+func (c *mightyMapDirectStorage[K, V]) Keys(_ context.Context) []K {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	keys := []K{}
+	for k := range c.data {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // Len returns the current number of key-value pairs in the direct storage.
@@ -312,6 +330,23 @@ func (c *mightyMapDefaultStorage[K]) Range(_ context.Context, f func(key K, valu
 			break
 		}
 	}
+}
+
+// Keys returns all keys in the byte storage in an unspecified order.
+// This operation uses a read lock to ensure data consistency during traversal.
+//
+// Parameters:
+//   - ctx: context for the operation (currently unused but maintained for interface compatibility)
+//
+// Returns a slice of all keys in the storage.
+func (c *mightyMapDefaultStorage[K]) Keys(_ context.Context) []K {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+	keys := []K{}
+	for k := range c.data {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // Len returns the current number of key-value pairs in the byte storage.

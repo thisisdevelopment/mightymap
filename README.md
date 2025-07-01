@@ -125,6 +125,14 @@ func main() {
     exists := cm.Has(ctx, 2)
     fmt.Println("Key 2 exists:", exists)
 
+    // Store more values
+    cm.Store(ctx, 2, "two")
+    cm.Store(ctx, 3, "three")
+
+    // Get all keys
+    keys := cm.Keys(ctx)
+    fmt.Println("All keys:", keys)
+
     // Delete a key
     cm.Delete(ctx, 1)
 
@@ -242,6 +250,7 @@ sensible defaults are used if you don't specify options.
 - `Store(key K, value V)`: Stores a value for a key.
 - `Delete(keys ...K)`: Deletes one or more keys.
 - `Range(f func(key K, value V) bool)`: Iterates over all key-value pairs.
+- `Keys() []K`: Returns all keys in the map in an unspecified order.
 - `Pop(key K) (value V, ok bool)`: Retrieves and deletes a value for a key.
 - `Next() (value V, key K, ok bool)`: Retrieves the next key-value pair.
 - `Len() int`: Returns the number of items in the map.
@@ -308,6 +317,7 @@ cm.Delete(keysToDelete...)
 	Store(ctx context.Context, key K, value V)
 	Delete(ctx context.Context, keys ...K)
 	Range(ctx context.Context, f func(key K, value V) bool)
+	Keys(ctx context.Context) []K
 	Next(ctx context.Context) (key K, value V, ok bool)
 	Len(ctx context.Context) int
 	Clear(ctx context.Context)

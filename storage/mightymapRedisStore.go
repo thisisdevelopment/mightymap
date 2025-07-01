@@ -218,6 +218,28 @@ func (c *mightyMapRedisStorage[K]) Range(ctx context.Context, f func(key K, valu
 	}
 }
 
+func (c *mightyMapRedisStorage[K]) Keys(ctx context.Context) []K {
+	keys, err := c.scan(ctx, c.opts.prefix+"*")
+	if err != nil {
+		panic(err)
+	}
+
+	var kkeys []K
+	for _, key := range keys {
+		keySplit := strings.SplitN(key, c.opts.prefix, 2)
+		if len(keySplit) != 2 {
+			continue
+		}
+		var k K
+		err := msgpack.Unmarshal([]byte(keySplit[1]), &k)
+		if err != nil {
+			panic(err)
+		}
+		kkeys = append(kkeys, k)
+	}
+	return kkeys
+}
+
 const defaultCursorSize int64 = 2048
 
 func (c *mightyMapRedisStorage[K]) scan(ctx context.Context, keyPattern string, maxKeys ...int) ([]string, error) {

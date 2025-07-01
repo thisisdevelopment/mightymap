@@ -181,3 +181,62 @@ func TestMightyMapBadgerStorageNext(t *testing.T) {
 		}
 	})
 }
+
+func TestMightyMapBadgerStorageKeys(t *testing.T) {
+	store := NewMightyMapBadgerStorage[string, int](
+		WithMemoryStorage(true),
+	)
+	defer store.Close(context.Background())
+
+	ctx := context.Background()
+
+	// Test Keys
+	t.Run("Keys", func(t *testing.T) {
+		store.Clear(ctx)
+		store.Store(ctx, "key1", 1)
+		store.Store(ctx, "key2", 2)
+		store.Store(ctx, "key3", 3)
+
+		keys := store.Keys(ctx)
+		if len(keys) != 3 {
+			t.Errorf("Keys() returned %d keys; want 3", len(keys))
+		}
+
+		// Verify all expected keys are present
+		keyMap := make(map[string]bool)
+		for _, key := range keys {
+			keyMap[key] = true
+		}
+		expectedKeys := []string{"key1", "key2", "key3"}
+		for _, expected := range expectedKeys {
+			if !keyMap[expected] {
+				t.Errorf("Expected key %s not found in Keys() result", expected)
+			}
+		}
+	})
+
+	// Test Keys with empty store
+	t.Run("Keys empty store", func(t *testing.T) {
+		store.Clear(ctx)
+		keys := store.Keys(ctx)
+		if len(keys) != 0 {
+			t.Errorf("Keys() returned %d keys for empty store; want 0", len(keys))
+		}
+	})
+
+	// Test Keys after delete
+	t.Run("Keys after delete", func(t *testing.T) {
+		store.Clear(ctx)
+		store.Store(ctx, "key4", 4)
+		store.Store(ctx, "key5", 5)
+		store.Delete(ctx, "key4")
+
+		keys := store.Keys(ctx)
+		if len(keys) != 1 {
+			t.Errorf("Keys() returned %d keys after delete; want 1", len(keys))
+		}
+		if keys[0] != "key5" {
+			t.Errorf("Keys() returned %s; want key5", keys[0])
+		}
+	})
+}
