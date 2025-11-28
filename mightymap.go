@@ -85,7 +85,9 @@ func (m *Map[K, V]) Has(ctx context.Context, key K) (ok bool) {
 // Store inserts or updates a value in the map for the given key.
 // If allowOverwrite is false, it will only insert if the key doesn't exist.
 func (m *Map[K, V]) Store(ctx context.Context, key K, value V) {
-	if _, ok := m.storage.Load(ctx, key); !ok || m.allowOverwrite {
+	if m.allowOverwrite {
+		m.storage.Store(ctx, key, value)
+	} else if _, ok := m.storage.Load(ctx, key); !ok {
 		m.storage.Store(ctx, key, value)
 	}
 }
