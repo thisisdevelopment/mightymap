@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.1
+
+Security update of two dependencies that come in through Badger.
+
+- `github.com/klauspost/compress` v1.18.0 to v1.20.4: out-of-bounds write and integer overflow in its compression code (GHSA-259r-337f-4rfw, GO-2026-6865). Badger reaches that code, so this one mattered.
+- `golang.org/x/net` v0.39.0 to v0.58.0: denial of service in its HTML parser (GHSA-5cv4-jp36-h3mw). MightyMap does not call that code.
+- **The minimum Go version is now 1.25** (was 1.23): the fixed versions of both need it.
+
+No change in the API, the behaviour or the stored data.
+
 ## v0.7.0
 
 ### New: Segment Storage
