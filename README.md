@@ -15,6 +15,7 @@ MightyMap is a powerful, thread-safe, and concurrent generic map implementation 
   - Default in-memory map with mutex locking.
   - SwissStorage for optimized performance.
   - BadgerStorage for persistent key-value storage.
+  - SegmentStorage for data that is larger than memory: keys in memory, values in files on disk, standard library only.
 - **Generic Support**: Works with any comparable key type and any value type.
 - **Flexible Overwrite Behavior**: Choose whether keys can be overwritten or not.
 
@@ -25,6 +26,21 @@ To install MightyMap, use `go get`:
 ```bash
 go get github.com/thisisdevelopment/mightymap
 ```
+
+## Release notes (unreleased)
+
+### New: Segment Storage
+
+`storage.NewMightyMapSegmentStorage` is a new storage backend for data that does not fit in memory. It keeps only the keys in memory and the values in files on disk, and uses nothing but the Go standard library.
+
+- New constructor: `NewMightyMapSegmentStorage[K, V](opts ...OptionFuncSegment)`.
+- New options: `WithSegmentDir`, `WithSegmentSize`, `WithSegmentValueCacheSize`.
+- Values are encoded with MessagePack, like in the Badger, SQLite and Redis storages, so custom types come back as the type they were stored as (see [MessagePack Encoding](#messagepack-encoding)).
+- No compaction: disk space comes back per segment file, as soon as none of the values in it is live.
+- The values do not survive a restart. Segment files of an earlier run are removed when the storage opens, and `Close` removes the files of the current run.
+- No new dependencies and no changes to the existing storages or to the `IMightyMapStorage` interface.
+
+See [Segment Storage](#segment-storage) for usage, options and when to pick it.
 
 ## Note v0.3.1 to v0.4.0
 The `ctx` parameter is now required for all methods. This is a breaking change. Since we allow multiple storage backends, we need to be able pass the context to the storage backend.
@@ -241,6 +257,57 @@ sensible defaults are used if you don't specify options.
 	}
 ```
 
+### Segment Storage
+
+Keeps only the keys in memory and the values in files on disk. It is made for data that is larger than the memory you want to spend on it, is written once, read often and removed in bulk: a cache that loads a new version of its data and then drops the previous one. It uses only the Go standard library.
+
+```go
+store := storage.NewMightyMapSegmentStorage[string, any](
+    storage.WithSegmentDir("/path/to/segments"),
+    storage.WithSegmentValueCacheSize(512 << 20),
+)
+cm := mightymap.New[string, any](false, store)
+```
+
+How it works:
+
+- `Store` encodes the value with MessagePack and appends it to the current segment file. An index in memory remembers for every key in which file its value is, where it starts and how long it is.
+- `Load` is one read at a known position in one file. Reads do not wait for each other and are not blocked by the disk access of other reads.
+- When a segment file reaches the segment size the next one is started.
+- `Delete` takes the key out of the index. A segment file is removed as soon as none of its values is live. Nothing is ever rewritten, so there is no compaction and no background work.
+- `Keys` and `Len` are answered from the index without touching the disk. `Range` reads the values one by one and does not lock the storage while your function runs, so that function may store and delete.
+
+Options:
+
+```
+    WithSegmentDir(dir string)                     // Directory for the segment files; created when missing. Default: a new directory in os.TempDir().
+    WithSegmentSize(segmentSize int64)             // Size in bytes at which a segment file is full. Default: 256 << 20 (256 MB).
+    WithSegmentValueCacheSize(valueCacheSize int64) // Keep up to this many bytes of recently loaded values in memory, decoded. Default: 0 (off).
+```
+
+What to know before you pick it:
+
+- **Memory** grows with the number of keys, not with the size of the values: count on roughly 100 to 150 bytes per key for string keys of about 40 characters. The operating system uses free memory to cache the files; that memory is given back under pressure.
+- **Not persistent.** The index lives in memory only. Segment files that an earlier run left in the directory are removed when the storage opens, and `Close` removes the files of the current run, plus the directory when nothing else is in it. Use Badger when the data has to survive a restart.
+- **One storage per directory.** Only files named `mightymap-*.seg` are ever removed; other files in the directory are left alone.
+- **Disk space comes back per file.** Values that were stored together and are deleted together free their files at once. A value that is deleted or replaced on its own keeps its bytes on disk until every other value in the same file is gone too. A workload that keeps replacing single values in a large, long-lived set is better off with Badger. A smaller segment size gives space back sooner.
+- **The value cache** hands the same decoded value to every caller, so treat loaded values as read-only when it is on. Without it every `Load` reads and decodes again.
+- **Errors.** Like the other storages it panics when the directory cannot be created or a value cannot be written (for example a full disk). A value that cannot be read is reported as not found.
+- No fsync, checksums or encryption: the files are a working copy of data that lives elsewhere.
+
+Measured against the Badger storage with values of 7.6 KB on average (Apple M2 Max; a container limited to 2.5 GiB of memory and 6 CPUs, holding 7.7 GB of values, so most reads come from disk):
+
+| | Segment Storage | Badger Storage |
+|---|---|---|
+| Store 3.8 GB (510,000 values) | 2.7 - 9.4 s | 27 - 40 s |
+| Go memory allocated while storing them | 0.08 GB | 36 - 40 GB |
+| Random reads per second, 6 CPUs | 297,000 | 2,300 |
+| Read latency p50 / p99 | 6 µs / 0.3 ms | 1.8 ms / 61 ms |
+| Delete 510,000 values | 0.2 s | 11.9 s |
+| Disk used after that delete, 3.9 GB live | 3.9 GB | 9.9 GB |
+
+These numbers are for values as raw bytes; decoding a value into a struct comes on top and is the same for both.
+
 ## API Reference
 
 ### Methods
@@ -280,6 +347,9 @@ BenchmarkBadgerMemStorageDelete-12        665391              1684 ns/op        
 BenchmarkBadgerStorageStore-12            231421              6041 ns/op            1518 B/op         41 allocs/op
 BenchmarkBadgerStorageLoad-12            1000000              1098 ns/op             632 B/op         18 allocs/op
 BenchmarkBadgerStorageDelete-12           547647              1970 ns/op             810 B/op         21 allocs/op
+BenchmarkSegmentStorageStore-12           432920              2502 ns/op             225 B/op          3 allocs/op
+BenchmarkSegmentStorageLoad-12           1873381               632.0 ns/op           152 B/op          9 allocs/op
+BenchmarkSegmentStorageDelete-12        32737390                31.51 ns/op            8 B/op          1 allocs/op
 BenchmarkSwissStorageStore-12           14271470               174.7 ns/op           102 B/op          0 allocs/op
 BenchmarkSwissStorageLoad-12            21759957                52.01 ns/op            0 B/op          0 allocs/op
 BenchmarkSwissStorageDelete-12          30795424                35.53 ns/op            8 B/op          1 allocs/op

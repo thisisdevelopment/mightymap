@@ -93,6 +93,7 @@ echo -e "\n${BLUE}Running storage backend tests...${NC}"
 run_test_file "mightymap_badger_test.go" "Badger storage tests" || overall_status=1
 run_test_file "mightymap_swiss_test.go" "Swiss storage tests" || overall_status=1
 run_test_file "mightymap_redis_test.go" "Redis storage tests" || overall_status=1
+run_test_file "mightymap_segment_test.go" "Segment storage tests" || overall_status=1
 
 # Run storage package tests
 echo -e "\n${BLUE}Running storage package tests...${NC}"

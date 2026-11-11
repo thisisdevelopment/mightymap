@@ -144,6 +144,9 @@ func TestBackendsKeepValueTypes(t *testing.T) {
 		"redis": func(t *testing.T) IMightyMapStorage[string, any] {
 			return NewMightyMapRedisStorage[string, any](WithRedisMock(t))
 		},
+		"segment files": func(t *testing.T) IMightyMapStorage[string, any] {
+			return NewMightyMapSegmentStorage[string, any](WithSegmentDir(t.TempDir()))
+		},
 	}
 	for name, open := range backends {
 		t.Run(name, func(t *testing.T) {
