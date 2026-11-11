@@ -42,6 +42,12 @@ go get github.com/thisisdevelopment/mightymap
 
 See [Segment Storage](#segment-storage) for usage, options and when to pick it.
 
+### Fixes found by fuzzing
+
+- Badger: `Len` counted a key again every time its value was replaced.
+- Default and Swiss storage: `Next` never returned the entry with the zero key (`0`, `""`) and reported an empty storage instead.
+- Decoding: a few damaged bytes that claimed an array of four billion elements made the decoder allocate for all of them (a bug in msgpack v5.4.1). Stored bytes are now checked before they are decoded. This costs about 8% per decoded value. Data that is cut off is now always refused.
+
 ### Less memory allocated when storing
 
 Storing a value in a storage that encodes with MessagePack (Badger, SQLite, Redis, Segment) used to grow a new buffer for every value, which allocated about 3.6 times the size of the encoded value. Values are now encoded in a reused buffer:
@@ -368,6 +374,18 @@ BenchmarkDefaultStorageDelete-12        33667726                31.96 ns/op     
 PASS
 ok      github.com/thisisdevelopment/mightymap/storage  35.461s
 ```
+
+## Fuzzing
+
+The public API is fuzzed against a plain Go map: any sequence of `Store`, `Load`, `Has`, `Delete`, `Pop`, `Next`, `Len`, `Keys`, `Range` and `Clear`, with any keys and values, has to give the same answers on every storage backend as the map does. Two more targets feed arbitrary bytes to the decoder, which must refuse them without panicking or allocating for lengths the data does not hold, and check that a value comes back from encoding as the type and value it went in as.
+
+```bash
+./fuzz.sh                  # every target, 30 seconds each
+./fuzz.sh Operations       # only the targets with Operations in their name
+FUZZ_TIME=5m ./fuzz.sh     # longer
+```
+
+A failing input is saved under `testdata/fuzz/` and committed with its fix; `./run_tests.sh` runs all saved inputs as normal tests.
 
 ## Limitations
 - The **default storage** backend and **Swiss backend** are not thread-safe by default. Using Delete() while iterating with Range() will cause a deadlock. To safely delete items while iterating, collect the keys to delete during Range() and call Delete() with all keys after Range() completes. For example:
