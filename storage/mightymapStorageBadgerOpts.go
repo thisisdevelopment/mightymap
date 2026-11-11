@@ -48,6 +48,7 @@ type badgerOpts struct {
 	encryptionKey         string
 	encryptionKeyRotation time.Duration
 	syncWrites            bool
+	valueCacheSize        int64
 }
 
 func getDefaultBadgerOptions() *badgerOpts {
@@ -127,6 +128,21 @@ func WithIndexCacheSize(indexCacheSize int64) OptionFuncBadger {
 func WithBlockCacheSize(blockCacheSize int64) OptionFuncBadger {
 	return func(o *badgerOpts) {
 		o.blockCacheSize = blockCacheSize
+	}
+}
+
+// WithValueCacheSize keeps recently loaded values in memory in their decoded
+// form, up to the given number of bytes, so that loading a hot value again does
+// not read and decode it once more. The size is counted by the encoded size of
+// the values; the decoded values take more memory than that. The least
+// recently used values are dropped first.
+//
+// With the cache on, every Load of a key returns the same value until it is
+// stored again, so loaded values must be treated as read-only.
+// **Default value**: `0` (no cache)
+func WithValueCacheSize(valueCacheSize int64) OptionFuncBadger {
+	return func(o *badgerOpts) {
+		o.valueCacheSize = valueCacheSize
 	}
 }
 

@@ -20,6 +20,10 @@ var (
 // The msgpackAdapter adapts any byteStorage implementation to implement IMightyMapStorage interface
 type msgpackAdapter[K comparable, V any] struct {
 	storage byteStorage[K]
+	// cache holds decoded values that were loaded recently; nil when it is off.
+	// With a cache every Load of a key returns the same value, so callers must
+	// treat loaded values as read-only.
+	cache *valueCache[K, V]
 }
 
 // newMsgpackAdapter creates a new adapter that uses MessagePack encoding to convert between V and []byte
@@ -218,6 +222,11 @@ func RegisterMsgpackType(value interface{}) {
 // Load retrieves a value from the storage
 func (m *msgpackAdapter[K, V]) Load(ctx context.Context, key K) (value V, ok bool) {
 	var zeroV V
+	if cached, ok := m.cache.get(key); ok {
+		return cached, true
+	}
+
+	writeCount := m.cache.writeCount()
 	data, ok := m.storage.Load(ctx, key)
 	if !ok {
 		return zeroV, false
@@ -229,6 +238,7 @@ func (m *msgpackAdapter[K, V]) Load(ctx context.Context, key K) (value V, ok boo
 		return zeroV, false
 	}
 
+	m.cache.add(key, decoded, int64(len(data)), writeCount)
 	return decoded, true
 }
 
@@ -241,11 +251,13 @@ func (m *msgpackAdapter[K, V]) Store(ctx context.Context, key K, value V) {
 	}
 
 	m.storage.Store(ctx, key, encoded)
+	m.cache.drop(key)
 }
 
 // Delete removes one or more keys from the storage
 func (m *msgpackAdapter[K, V]) Delete(ctx context.Context, keys ...K) {
 	m.storage.Delete(ctx, keys...)
+	m.cache.drop(keys...)
 }
 
 // Range iterates over all key-value pairs in the storage
@@ -273,6 +285,7 @@ func (m *msgpackAdapter[K, V]) Next(ctx context.Context) (key K, value V, ok boo
 	if !ok {
 		return k, zeroV, false
 	}
+	m.cache.drop(k)
 
 	decoded, err := msgpackDecodeValue[V](data)
 	if err != nil {
@@ -291,6 +304,7 @@ func (m *msgpackAdapter[K, V]) Len(ctx context.Context) int {
 // Clear removes all items from the storage
 func (m *msgpackAdapter[K, V]) Clear(ctx context.Context) {
 	m.storage.Clear(ctx)
+	m.cache.clear()
 }
 
 // Close closes the storage

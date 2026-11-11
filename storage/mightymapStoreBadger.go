@@ -117,7 +117,9 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 		len:         atomic.Int64{},
 		initLenCall: atomic.Bool{},
 	}
-	return newMsgpackAdapter[K, V](storage)
+	adapter := newMsgpackAdapter[K, V](storage)
+	adapter.cache = newValueCache[K, V](opts.valueCacheSize)
+	return adapter
 }
 
 // Store adds a key-value pair to the Badger storage.
