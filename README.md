@@ -42,6 +42,15 @@ go get github.com/thisisdevelopment/mightymap
 
 See [Segment Storage](#segment-storage) for usage, options and when to pick it.
 
+### Less memory allocated when storing
+
+Storing a value in a storage that encodes with MessagePack (Badger, SQLite, Redis, Segment) used to grow a new buffer for every value, which allocated about 3.6 times the size of the encoded value. Values are now encoded in a reused buffer:
+
+- Badger, SQLite and Redis get a copy of exactly the encoded size: about a third of the allocation per `Store`.
+- The Segment Storage writes the buffer to its file without a copy: a `Store` of a 4.5 KB value went from 16.4 KB and 10 allocations to 16 bytes and 1 allocation.
+
+No change in behaviour or in the stored format.
+
 ## Note v0.3.1 to v0.4.0
 The `ctx` parameter is now required for all methods. This is a breaking change. Since we allow multiple storage backends, we need to be able pass the context to the storage backend.
 

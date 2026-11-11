@@ -96,6 +96,7 @@ func NewMightyMapSegmentStorage[K comparable, V any](optfuncs ...OptionFuncSegme
 
 	adapter := newMsgpackAdapter[K, V](newSegmentStorage[K](opts.dir, opts.segmentSize))
 	adapter.cache = newValueCache[K, V](opts.valueCacheSize)
+	adapter.storageKeepsNothing = true // Store writes the value to a file and is done with it
 	return adapter
 }
 
@@ -153,6 +154,7 @@ func newSegmentStorage[K comparable](dir string, segmentSize int64) *segmentStor
 }
 
 // Store appends the value to the current segment file and points the key at it.
+// It must not keep value: the adapter reuses that memory for the next value.
 func (s *segmentStorage[K]) Store(_ context.Context, key K, value []byte) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()

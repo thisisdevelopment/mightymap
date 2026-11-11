@@ -24,6 +24,9 @@ type msgpackAdapter[K comparable, V any] struct {
 	// With a cache every Load of a key returns the same value, so callers must
 	// treat loaded values as read-only.
 	cache *valueCache[K, V]
+	// storageKeepsNothing is set for a storage whose Store does not hold on to
+	// the slice it is given: it then gets the encode buffer itself, not a copy.
+	storageKeepsNothing bool
 }
 
 // newMsgpackAdapter creates a new adapter that uses MessagePack encoding to convert between V and []byte
@@ -40,17 +43,54 @@ const (
 	wrapperDataField = "data"
 )
 
-// msgpackEncodeValue encodes a value to a byte slice using MessagePack encoding
+// encodeBuffers holds the scratch buffers values are encoded in. Without them
+// every value grows a buffer of its own, which allocates several times its size.
+var encodeBuffers = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+
+// A buffer that grew larger than this for one big value is not kept for reuse.
+const maxPooledEncodeBuffer = 1 << 20
+
+func getEncodeBuffer() *bytes.Buffer {
+	buf := encodeBuffers.Get().(*bytes.Buffer)
+	buf.Reset()
+	return buf
+}
+
+func putEncodeBuffer(buf *bytes.Buffer) {
+	if buf.Cap() <= maxPooledEncodeBuffer {
+		encodeBuffers.Put(buf)
+	}
+}
+
+// msgpackEncodeValue encodes a value to a byte slice using MessagePack encoding.
+// The slice is the caller's and exactly as large as the encoded value.
 func msgpackEncodeValue[V any](value V) ([]byte, error) {
+	buf := getEncodeBuffer()
+	defer putEncodeBuffer(buf)
+
+	if err := msgpackEncodeInto(buf, value); err != nil {
+		return nil, err
+	}
+	return cloneExact(buf.Bytes()), nil
+}
+
+// cloneExact copies data into a slice without spare capacity.
+func cloneExact(data []byte) []byte {
+	clone := make([]byte, len(data))
+	copy(clone, data)
+	return clone
+}
+
+// msgpackEncodeInto appends the MessagePack encoding of value to buf.
+func msgpackEncodeInto[V any](buf *bytes.Buffer, value V) error {
 	// Store the type information along with the value, but only for non-nil,
 	// non-interface types
 	valueType := reflect.TypeOf(value)
 	typed := valueType != nil && valueType.Kind() != reflect.Interface
 
-	var buf bytes.Buffer
 	enc := msgpack.GetEncoder()
 	defer msgpack.PutEncoder(enc)
-	enc.Reset(&buf)
+	enc.Reset(buf)
 
 	// The type goes first, so a reader knows it before it reaches the data and
 	// can decode the data in one go.
@@ -71,9 +111,9 @@ func msgpackEncodeValue[V any](value V) ([]byte, error) {
 		}
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to msgpack encode value: %w", err)
+		return fmt.Errorf("failed to msgpack encode value: %w", err)
 	}
-	return buf.Bytes(), nil
+	return nil
 }
 
 // msgpackDecodeValue decodes a byte slice to a value using MessagePack encoding.
@@ -244,10 +284,16 @@ func (m *msgpackAdapter[K, V]) Load(ctx context.Context, key K) (value V, ok boo
 
 // Store serializes and stores a value in the storage
 func (m *msgpackAdapter[K, V]) Store(ctx context.Context, key K, value V) {
-	encoded, err := msgpackEncodeValue(value)
-	if err != nil {
+	buf := getEncodeBuffer()
+	defer putEncodeBuffer(buf)
+
+	if err := msgpackEncodeInto(buf, value); err != nil {
 		// If we can't encode, we don't store anything
 		return
+	}
+	encoded := buf.Bytes()
+	if !m.storageKeepsNothing {
+		encoded = cloneExact(encoded) // the buffer is reused, the storage may keep its slice
 	}
 
 	m.storage.Store(ctx, key, encoded)
