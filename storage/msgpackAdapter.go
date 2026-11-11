@@ -1,9 +1,11 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -27,134 +29,171 @@ func newMsgpackAdapter[K comparable, V any](storage byteStorage[K]) *msgpackAdap
 	}
 }
 
+// Field names of the wrapper a value is stored in: a MessagePack map that holds
+// the name of the value's type next to the value itself.
+const (
+	wrapperTypeField = "type"
+	wrapperDataField = "data"
+)
+
 // msgpackEncodeValue encodes a value to a byte slice using MessagePack encoding
 func msgpackEncodeValue[V any](value V) ([]byte, error) {
-	// Store the type information along with the value
+	// Store the type information along with the value, but only for non-nil,
+	// non-interface types
 	valueType := reflect.TypeOf(value)
+	typed := valueType != nil && valueType.Kind() != reflect.Interface
 
-	// Create a wrapper with type information
-	wrapper := map[string]interface{}{
-		"data": value,
+	var buf bytes.Buffer
+	enc := msgpack.GetEncoder()
+	defer msgpack.PutEncoder(enc)
+	enc.Reset(&buf)
+
+	// The type goes first, so a reader knows it before it reaches the data and
+	// can decode the data in one go.
+	fields := 1
+	if typed {
+		fields = 2
 	}
-
-	// Add type information only for non-nil, non-interface types
-	if valueType != nil && valueType.Kind() != reflect.Interface {
-		wrapper["type"] = valueType.String()
-
-		// Register the type if not already registered
-		typeRegistryLock.RLock()
-		_, exists := typeRegistry[valueType.String()]
-		typeRegistryLock.RUnlock()
-
-		if !exists {
-			RegisterMsgpackType(value)
+	err := enc.EncodeMapLen(fields)
+	if err == nil && typed {
+		registerMsgpackType(valueType)
+		if err = enc.EncodeString(wrapperTypeField); err == nil {
+			err = enc.EncodeString(valueType.String())
 		}
 	}
-
-	encoded, err := msgpack.Marshal(wrapper)
+	if err == nil {
+		if err = enc.EncodeString(wrapperDataField); err == nil {
+			err = enc.Encode(value)
+		}
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to msgpack encode value: %w", err)
 	}
-	return encoded, nil
+	return buf.Bytes(), nil
 }
 
-// msgpackDecodeValue decodes a byte slice to a value using MessagePack encoding
+// msgpackDecodeValue decodes a byte slice to a value using MessagePack encoding.
+// The data is decoded once, straight into its type.
 func msgpackDecodeValue[V any](data []byte) (V, error) {
 	var value V
 	if len(data) == 0 {
 		return value, nil
 	}
 
-	// Try to decode with type information first
-	var wrapper map[string]interface{}
-	err := msgpack.Unmarshal(data, &wrapper)
+	dec := msgpack.GetDecoder()
+	defer msgpack.PutDecoder(dec)
+	dec.Reset(bytes.NewReader(data))
+
+	fields, err := dec.DecodeMapLen()
 	if err != nil {
 		// Return the error immediately for invalid msgpack data
 		return value, fmt.Errorf("failed to msgpack decode value: %w", err)
 	}
 
-	// Extract the data part from the wrapper
-	rawData, ok := wrapper["data"]
-	if !ok {
-		// No data field, try direct decoding
-		err = msgpack.Unmarshal(data, &value)
+	var (
+		typeName string
+		raw      msgpack.RawMessage // the data, when it comes before its type
+		hasData  bool
+	)
+	for i := 0; i < fields; i++ {
+		field, err := dec.DecodeString()
 		if err != nil {
+			return value, fmt.Errorf("failed to msgpack decode value: %w", err)
+		}
+		switch field {
+		case wrapperTypeField:
+			var name any
+			name, err = dec.DecodeInterface()
+			typeName, _ = name.(string)
+		case wrapperDataField:
+			if typeName != "" {
+				return msgpackDecodeAs[V](typeName, dec.Decode)
+			}
+			// Written by an earlier version with the data first: keep the
+			// bytes until the type is known.
+			raw, err = dec.DecodeRaw()
+			hasData = true
+		default:
+			err = dec.Skip()
+		}
+		if err != nil {
+			return value, fmt.Errorf("failed to msgpack decode value: %w", err)
+		}
+	}
+
+	if !hasData {
+		// No data field, the bytes are the value itself
+		if err = msgpack.Unmarshal(data, &value); err != nil {
 			return value, fmt.Errorf("failed to msgpack decode value: %w", err)
 		}
 		return value, nil
 	}
+	return msgpackDecodeAs[V](typeName, func(target any) error {
+		return msgpack.Unmarshal(raw, target)
+	})
+}
 
-	// Check if we have type information
-	typeName, hasType := wrapper["type"].(string)
-	if !hasType {
-		// No type information, try to decode data directly
-		encoded, err := msgpack.Marshal(rawData)
-		if err != nil {
-			return value, fmt.Errorf("failed to re-encode inner data: %w", err)
+// msgpackDecodeAs decodes into a V. When V is an interface the result gets the
+// registered type with the given name, so a value comes back as what it was
+// stored as: a struct as that struct, a pointer as a pointer.
+func msgpackDecodeAs[V any](typeName string, decode func(target any) error) (V, error) {
+	var value V
+	target := reflect.ValueOf(&value).Elem()
+
+	if target.Kind() == reflect.Interface {
+		if concrete, ok := lookupMsgpackType(typeName); ok && concrete.AssignableTo(target.Type()) {
+			decoded := reflect.New(concrete)
+			if err := decode(decoded.Interface()); err != nil {
+				return value, fmt.Errorf("failed to decode to concrete type: %w", err)
+			}
+			target.Set(decoded.Elem())
+			return value, nil
 		}
-
-		err = msgpack.Unmarshal(encoded, &value)
-		if err != nil {
-			return value, fmt.Errorf("failed to decode inner data: %w", err)
-		}
-		return value, nil
 	}
 
-	// Look up the registered type
-	typeRegistryLock.RLock()
-	valueType, exists := typeRegistry[typeName]
-	typeRegistryLock.RUnlock()
-
-	if !exists {
-		// Type not found, try decoding data directly
-		encoded, err := msgpack.Marshal(rawData)
-		if err != nil {
-			return value, fmt.Errorf("failed to re-encode inner data: %w", err)
-		}
-
-		err = msgpack.Unmarshal(encoded, &value)
-		if err != nil {
-			return value, fmt.Errorf("failed to decode inner data: %w", err)
-		}
-		return value, nil
-	}
-
-	// Create a new instance of the concrete type
-	newValue := reflect.New(valueType).Interface()
-
-	// Re-encode the data part
-	reencoded, err := msgpack.Marshal(rawData)
-	if err != nil {
-		return value, fmt.Errorf("failed to re-encode inner data: %w", err)
-	}
-
-	// Decode into the concrete type
-	err = msgpack.Unmarshal(reencoded, newValue)
-	if err != nil {
-		return value, fmt.Errorf("failed to decode to concrete type: %w", err)
-	}
-
-	// Check if we can assign to the expected type
-	valueOfV := reflect.ValueOf(&value).Elem()
-
-	// For interface{} types, we can just set the concrete value
-	if valueOfV.Kind() == reflect.Interface && valueOfV.CanSet() {
-		valueOfV.Set(reflect.ValueOf(reflect.ValueOf(newValue).Elem().Interface()))
-		return value, nil
-	}
-
-	// For non-interface types, try direct decoding
-	encoded, err := msgpack.Marshal(rawData)
-	if err != nil {
-		return value, fmt.Errorf("failed to re-encode data: %w", err)
-	}
-
-	err = msgpack.Unmarshal(encoded, &value)
-	if err != nil {
+	// A concrete V, or a type that is not registered: decode directly
+	if err := decode(&value); err != nil {
 		return value, fmt.Errorf("failed to decode to expected type: %w", err)
 	}
-
 	return value, nil
+}
+
+// registerMsgpackType registers the type under the name RegisterMsgpackType
+// uses for it, unless it is there already.
+func registerMsgpackType(t reflect.Type) {
+	if t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	typeRegistryLock.RLock()
+	_, exists := typeRegistry[t.String()]
+	typeRegistryLock.RUnlock()
+	if !exists {
+		typeRegistryLock.Lock()
+		typeRegistry[t.String()] = t
+		typeRegistryLock.Unlock()
+	}
+}
+
+// lookupMsgpackType finds the type for a name as written by msgpackEncodeValue.
+// Pointer types are registered by their element type, so "*pkg.T" resolves
+// through "pkg.T".
+func lookupMsgpackType(name string) (reflect.Type, bool) {
+	pointers := 0
+	typeRegistryLock.RLock()
+	t, ok := typeRegistry[name]
+	for !ok && strings.HasPrefix(name, "*") {
+		name = name[1:]
+		pointers++
+		t, ok = typeRegistry[name]
+	}
+	typeRegistryLock.RUnlock()
+	if !ok {
+		return nil, false
+	}
+	for ; pointers > 0; pointers-- {
+		t = reflect.PointerTo(t)
+	}
+	return t, true
 }
 
 // RegisterMsgpackType registers a type with the MessagePack encoder.
