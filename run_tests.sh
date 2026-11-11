@@ -78,11 +78,11 @@ overall_status=0
 
 # Main package tests (excluding fuzz tests)
 echo -e "\n${BLUE}Running core tests...${NC}"
-run_test "go test -v -run='^Test[^Fuzz]|^Example'" "core tests (excluding fuzz tests)" || overall_status=1
+run_test "go test -v -run='^(Test|Example)'" "core tests (excluding fuzz tests)" || overall_status=1
 
 # Run with race detector (individual files to avoid package conflicts)
 echo -e "\n${BLUE}Running race detector tests...${NC}"
-run_test "go test -v -race -run='^Test[^Fuzz]|^Example' mightymap.go mightymap_test.go" "race detector tests" || overall_status=1
+run_test "go test -v -race -run='^(Test|Example)' mightymap.go mightymap_test.go" "race detector tests" || overall_status=1
 
 # Run example tests
 echo -e "\n${BLUE}Running example tests...${NC}"
@@ -97,7 +97,7 @@ run_test_file "mightymap_segment_test.go" "Segment storage tests" || overall_sta
 
 # Run storage package tests
 echo -e "\n${BLUE}Running storage package tests...${NC}"
-run_test "go test -v ./storage -run='^Test[^Fuzz]'" "storage package tests" || overall_status=1
+run_test "go test -v ./storage -run='^Test'" "storage package tests" || overall_status=1
 
 # Run unit tests
 echo -e "\n${BLUE}Running unit tests...${NC}"
@@ -121,7 +121,7 @@ test_results+=("SKIP")
 echo -e "\n${BLUE}Generating test coverage report...${NC}"
 if [ $overall_status -eq 0 ]; then
   # Run coverage tests
-  if go test -v -coverprofile=coverage.out ./... -run='^Test[^Fuzz]|^Example' -skip='badger_byte_slice_test|byte_slice_wrapper_test'; then
+  if go test -v -coverprofile=coverage.out ./... -run='^(Test|Example)' -skip='badger_byte_slice_test|byte_slice_wrapper_test'; then
     if [ -f coverage.out ]; then
       echo -e "\n${BLUE}Coverage by package:${NC}"
       go tool cover -func=coverage.out
