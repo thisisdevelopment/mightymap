@@ -522,3 +522,41 @@ func TestMsgpackCheckLengths(t *testing.T) {
 		}
 	}
 }
+
+// Found by FuzzOperationsDefault: the zero value of the key type is a key
+// like any other, Next must hand it out too.
+func TestNextReturnsTheZeroKey(t *testing.T) {
+	ctx := context.Background()
+	backends := map[string]func(t *testing.T) IMightyMapStorage[int, string]{
+		"default": func(*testing.T) IMightyMapStorage[int, string] { return NewMightyMapDefaultStorage[int, string]() },
+		"swiss":   func(*testing.T) IMightyMapStorage[int, string] { return NewMightyMapSwissStorage[int, string]() },
+		"badger":  func(*testing.T) IMightyMapStorage[int, string] { return NewMightyMapBadgerStorage[int, string]() },
+		"sqlite": func(*testing.T) IMightyMapStorage[int, string] {
+			return NewMightyMapSQLiteStorage[int, string](WithSQLiteInMemory())
+		},
+		"redis": func(t *testing.T) IMightyMapStorage[int, string] {
+			return NewMightyMapRedisStorage[int, string](WithRedisMock(t))
+		},
+		"segment files": func(t *testing.T) IMightyMapStorage[int, string] {
+			return NewMightyMapSegmentStorage[int, string](WithSegmentDir(t.TempDir()))
+		},
+	}
+	for name, open := range backends {
+		t.Run(name, func(t *testing.T) {
+			store := open(t)
+			defer func() { _ = store.Close(ctx) }()
+			store.Store(ctx, 0, "zero")
+
+			key, value, ok := store.Next(ctx)
+			if !ok || key != 0 || value != "zero" {
+				t.Errorf("Next() = %d, %q, %v; want 0, zero, true", key, value, ok)
+			}
+			if got := store.Len(ctx); got != 0 {
+				t.Errorf("Len() = %d after Next took the only value, want 0", got)
+			}
+			if _, _, ok := store.Next(ctx); ok {
+				t.Error("Next() found a value in an empty storage")
+			}
+		})
+	}
+}
