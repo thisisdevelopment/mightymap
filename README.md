@@ -33,7 +33,7 @@ A cache usually starts as a `map` with a mutex. Then the data outgrows memory, o
 go get github.com/thisisdevelopment/mightymap
 ```
 
-Requires Go 1.23 or newer.
+Requires Go 1.25 or newer.
 
 ## Quick start
 
@@ -83,7 +83,7 @@ The first argument of `New` decides what `Store` does with a key that already ex
 | **Badger** | Badger, on disk or in memory | yes, on disk | no | Badger's caches | [badger](https://github.com/dgraph-io/badger) | the data has to survive a restart |
 | **SQLite** | one SQLite file | yes | no | SQLite's cache | [go-sqlite3](https://github.com/mattn/go-sqlite3) (cgo) | you want to open the data with other tools |
 | **Redis** | a Redis server | yes | yes | nothing local | [go-redis](https://github.com/redis/go-redis) | several services need the same data |
-| **Swiss** | Swiss table in memory | no | no | keys and values | [swiss](https://github.com/dolthub/swiss) | you are on Go 1.23; from Go 1.24 the default storage is as fast |
+| **Swiss** | Swiss table in memory | no | no | keys and values | [swiss](https://github.com/dolthub/swiss) | you already use it; the default storage is as fast |
 
 Badger, SQLite, Redis and Segment encode values with MessagePack. A value stored as a struct, a pointer or a slice comes back as that type, also in a `Map[K, any]`.
 
@@ -233,7 +233,7 @@ Options: `WithRedisAddr`, `WithRedisUsername`, `WithRedisPassword`, `WithRedisDB
 
 ### Swiss storage
 
-Uses [dolthub/swiss](https://github.com/dolthub/swiss). Since Go 1.24 the built-in map is a Swiss table too, so on Go 1.24 and newer the default storage does the same job.
+Uses [dolthub/swiss](https://github.com/dolthub/swiss). Since Go 1.24 the built-in map is a Swiss table too, so the default storage does the same job. Kept for code that already uses it.
 
 ```go
 store := storage.NewMightyMapSwissStorage[int, string](storage.WithDefaultCapacity(100_000))
