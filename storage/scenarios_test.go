@@ -299,14 +299,18 @@ func TestRedisNextDrainsTheStore(t *testing.T) {
 }
 
 func TestWithRedisTLSConfigUsesTheGivenConfig(t *testing.T) {
-	t.Skip("known bug: WithRedisTLSConfig stores an empty tls.Config instead of the given one " +
-		"when no config was set before, which is always the case for a new storage")
-
 	given := &tls.Config{ServerName: "redis.example.com", MinVersion: tls.VersionTLS13}
 	opts := getDefaultRedisOptions()
 	WithRedisTLSConfig(given)(opts)
 	if opts.tlsConfig != given {
 		t.Errorf("tlsConfig = %+v, want the config that was passed in", opts.tlsConfig)
+	}
+
+	// A later option replaces an earlier one.
+	other := &tls.Config{ServerName: "other.example.com", MinVersion: tls.VersionTLS12}
+	WithRedisTLSConfig(other)(opts)
+	if opts.tlsConfig != other {
+		t.Errorf("tlsConfig = %+v, want the config of the last option", opts.tlsConfig)
 	}
 }
 
