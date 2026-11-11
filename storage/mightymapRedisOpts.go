@@ -106,10 +106,6 @@ func WithRedisTLS(tls bool) OptionFuncRedis {
 // Only used when TLS is enabled.
 func WithRedisTLSConfig(tlsConfig *tls.Config) OptionFuncRedis {
 	return func(opts *redisOpts) {
-		if opts.tlsConfig == nil {
-			opts.tlsConfig = &tls.Config{}
-			return
-		}
 		opts.tlsConfig = tlsConfig
 	}
 }

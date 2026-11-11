@@ -245,11 +245,11 @@ func (c *mightyMapDirectStorage[K, V]) Next(ctx context.Context) (key K, value V
 	c.Range(ctx, func(k K, v V) bool {
 		value = v
 		key = k
+		ok = true
 		return false
 	})
 
-	if key != *new(K) {
-		ok = true
+	if ok {
 		c.Delete(ctx, key)
 	}
 

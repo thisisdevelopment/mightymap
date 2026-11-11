@@ -131,11 +131,11 @@ func (c *mightyMapSwissStorage[K]) Next(ctx context.Context) (key K, value []byt
 	c.Range(ctx, func(k K, v []byte) bool {
 		value = v
 		key = k
+		ok = true
 		return false
 	})
 
-	if key != *new(K) {
-		ok = true
+	if ok {
 		c.Delete(ctx, key)
 	}
 
