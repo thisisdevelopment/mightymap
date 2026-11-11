@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"runtime/pprof"
 	"strings"
 	"testing"
@@ -427,5 +428,97 @@ func TestBadgerLenCountsAKeyThatIsStoredAgainOnce(t *testing.T) {
 				t.Errorf("Len() = %d after deleting one of two keys, want 1", got)
 			}
 		})
+	}
+}
+
+// Found by FuzzMsgpackDecodeValue: a few bytes that claim to hold an array of
+// four billion elements must be refused, not allocated for.
+func TestMsgpackDecodeValueDoesNotTrustAClaimedLength(t *testing.T) {
+	cases := map[string][]byte{
+		"array as the value":    []byte("\x82\xa4type\xa3int\xa4data\xdd\xff\xff\xff\xff"),
+		"array without wrapper": []byte("\xdd\xff\xff\xff\xff"),
+		"array in a field":      []byte("\x82\xa4type\xa1x\xa4data\x81\xa5Sizes\xdd\xff\xff\xff\xff"),
+		"data before its type":  []byte("\x82\xa4data\xdd\xff\xff\xff\xff\xa4type\xa3int"),
+	}
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			var before, after runtime.MemStats
+			runtime.ReadMemStats(&before)
+			start := time.Now()
+
+			_, errSlice := msgpackDecodeValue[[]int](data)
+			_, errItem := msgpackDecodeValue[roundTripItem](data)
+			_, errAny := msgpackDecodeValue[any](data)
+
+			runtime.ReadMemStats(&after)
+			if errSlice == nil || errItem == nil || errAny == nil {
+				t.Errorf("decoded without an error: []int %v, struct %v, any %v", errSlice, errItem, errAny)
+			}
+			if allocated := (after.TotalAlloc - before.TotalAlloc) >> 20; allocated > 16 {
+				t.Errorf("allocated %d MB to decode %d bytes", allocated, len(data))
+			}
+			if took := time.Since(start); took > 2*time.Second {
+				t.Errorf("took %s to decode %d bytes", took, len(data))
+			}
+		})
+	}
+}
+
+// The length check must let through everything the encoder can write, and
+// refuse every value that is cut off.
+func TestMsgpackCheckLengths(t *testing.T) {
+	long := strings.Repeat("x", 70000)
+	values := []any{
+		nil, true, false, 0, 127, -1, -33, 200, 70000, int64(5e9), -200, -70000, int64(-5e9),
+		uint8(200), uint16(60000), uint32(4e9), uint64(1 << 63), float32(1.5), 1.5,
+		"", "short", strings.Repeat("s", 40), strings.Repeat("s", 300), long,
+		[]byte{}, []byte("bin"), []byte(strings.Repeat("b", 300)), []byte(long),
+		[]int{1, 2, 3}, make([]int, 20), make([]string, 70000),
+		map[string]int{"a": 1}, map[string]any{"a": []any{1, "b", nil}, "c": map[string]any{"d": 2.5}},
+		time.Date(2026, 11, 11, 12, 0, 0, 0, time.UTC), newRoundTripItem(40),
+	}
+	manyKeys := map[int]int{}
+	for i := range 20 {
+		manyKeys[i] = i
+	}
+	values = append(values, manyKeys)
+
+	for _, value := range values {
+		encoded, err := msgpack.Marshal(value)
+		if err != nil {
+			t.Fatalf("%T: %v", value, err)
+		}
+		if err := msgpackCheckLengths(encoded); err != nil {
+			t.Errorf("%T of %d bytes is refused: %v", value, len(encoded), err)
+		}
+		for _, cut := range []int{0, 1, len(encoded) / 2, len(encoded) - 1} {
+			if cut < len(encoded) && msgpackCheckLengths(encoded[:cut]) == nil {
+				t.Errorf("%T cut off at %d of %d bytes is accepted", value, cut, len(encoded))
+			}
+		}
+		if err := msgpackCheckLengths(append(encoded, 0xc1, 0xff)); err != nil {
+			t.Errorf("%T followed by other bytes is refused: %v", value, err)
+		}
+	}
+
+	for name, tc := range map[string]struct {
+		data  string
+		valid bool
+	}{
+		"ext of 1 byte":               {"\xd4\x01\xaa", true},
+		"ext of 16 bytes":             {"\xd8\x01" + strings.Repeat("\xaa", 16), true},
+		"ext of 16 bytes, cut off":    {"\xd8\x01" + strings.Repeat("\xaa", 15), false},
+		"ext with 1 byte length":      {"\xc7\x03\x01\xaa\xbb\xcc", true},
+		"ext with 2 byte length":      {"\xc8\x00\x02\x01\xaa\xbb", true},
+		"ext with 4 byte length":      {"\xc9\x00\x00\x00\x01\x01\xaa", true},
+		"ext that claims 4 GB":        {"\xc9\xff\xff\xff\xff\x01\xaa", false},
+		"length that is cut off":      {"\xdd\x00\x00", false},
+		"byte MessagePack never uses": {"\xc1", false},
+		"map that claims too much":    {"\xde\xff\xff\xa1a\x01", false},
+		"string that claims 4 GB":     {"\xdb\xff\xff\xff\xffabc", false},
+	} {
+		if err := msgpackCheckLengths([]byte(tc.data)); (err == nil) != tc.valid {
+			t.Errorf("%s: err = %v, want valid = %v", name, err, tc.valid)
+		}
 	}
 }

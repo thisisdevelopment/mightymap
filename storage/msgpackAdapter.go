@@ -3,6 +3,7 @@ package storage
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -124,6 +125,10 @@ func msgpackDecodeValue[V any](data []byte) (V, error) {
 		return value, nil
 	}
 
+	if err := msgpackCheckLengths(data); err != nil {
+		return value, fmt.Errorf("failed to msgpack decode value: %w", err)
+	}
+
 	dec := msgpack.GetDecoder()
 	defer msgpack.PutDecoder(dec)
 	dec.Reset(bytes.NewReader(data))
@@ -175,6 +180,92 @@ func msgpackDecodeValue[V any](data []byte) (V, error) {
 	return msgpackDecodeAs[V](typeName, func(target any) error {
 		return msgpack.Unmarshal(raw, target)
 	})
+}
+
+var errMsgpackLength = errors.New("msgpack: data is cut off or claims a length it does not hold")
+
+// msgpackCheckLengths walks over the first MessagePack value in data and
+// reports whether every length in it fits in the bytes that follow. The
+// decoder allocates for the length of a slice before it reads the elements,
+// so a few damaged bytes that claim four billion elements would cost
+// gigabytes. After this check a claimed length is never more than the data
+// has bytes.
+//
+//nolint:mnd,gocyclo // the numbers are the MessagePack format codes
+func msgpackCheckLengths(data []byte) error {
+	pending := 1 // values still to come
+	for pos := 0; pending > 0; pending-- {
+		if pos >= len(data) {
+			return errMsgpackLength
+		}
+		code := data[pos]
+		pos++
+
+		var skip, sizeBytes, children int
+		switch {
+		case code <= 0x7f, code >= 0xe0, code == 0xc0, code == 0xc2, code == 0xc3: // small ints, nil, bools
+		case code <= 0x8f: // map of up to 15
+			children = 2 * int(code&0x0f)
+		case code <= 0x9f: // array of up to 15
+			children = int(code & 0x0f)
+		case code <= 0xbf: // string of up to 31
+			skip = int(code & 0x1f)
+		case code == 0xc4, code == 0xd9: // bin, string
+			sizeBytes = 1
+		case code == 0xc5, code == 0xda:
+			sizeBytes = 2
+		case code == 0xc6, code == 0xdb:
+			sizeBytes = 4
+		case code == 0xc7: // ext: one more byte for its type
+			sizeBytes, skip = 1, 1
+		case code == 0xc8:
+			sizeBytes, skip = 2, 1
+		case code == 0xc9:
+			sizeBytes, skip = 4, 1
+		case code == 0xca, code == 0xce, code == 0xd2: // float32, uint32, int32
+			skip = 4
+		case code == 0xcb, code == 0xcf, code == 0xd3: // float64, uint64, int64
+			skip = 8
+		case code == 0xcc, code == 0xd0:
+			skip = 1
+		case code == 0xcd, code == 0xd1:
+			skip = 2
+		case code >= 0xd4 && code <= 0xd8: // ext of 1, 2, 4, 8 or 16 bytes
+			skip = 1 + 1<<(code-0xd4)
+		case code == 0xdc, code == 0xde: // array, map
+			sizeBytes = 2
+		case code == 0xdd, code == 0xdf:
+			sizeBytes = 4
+		default: // 0xc1 is not used by MessagePack
+			return errMsgpackLength
+		}
+
+		if sizeBytes > 0 {
+			if pos+sizeBytes > len(data) {
+				return errMsgpackLength
+			}
+			size := 0
+			for _, b := range data[pos : pos+sizeBytes] {
+				size = size<<8 | int(b)
+			}
+			pos += sizeBytes
+			switch code {
+			case 0xdc, 0xdd:
+				children = size
+			case 0xde, 0xdf:
+				children = 2 * size
+			default:
+				skip += size
+			}
+		}
+		// Every child takes at least one byte.
+		if skip > len(data)-pos || children > len(data)-pos-skip {
+			return errMsgpackLength
+		}
+		pos += skip
+		pending += children
+	}
+	return nil
 }
 
 // msgpackDecodeAs decodes into a V. When V is an interface the result gets the
