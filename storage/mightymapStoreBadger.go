@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -136,15 +137,21 @@ func (c *mightyMapBadgerStorage[K]) Store(_ context.Context, key K, value []byte
 		panic(err)
 	}
 
-	// Store in BadgerDB with proper error handling
+	// Store in BadgerDB with proper error handling. Only a key that was not
+	// there yet adds to the number of keys.
+	isNew := false
 	err = c.db.Update(func(txn *badger.Txn) error {
+		_, getErr := txn.Get(keyBytes)
+		isNew = errors.Is(getErr, badger.ErrKeyNotFound)
 		return txn.Set(keyBytes, value)
 	})
 	if err != nil {
 		log.Printf("Error storing value: %v", err)
 		panic(err)
 	}
-	c.len.Add(1)
+	if isNew {
+		c.len.Add(1)
+	}
 }
 
 func (c *mightyMapBadgerStorage[K]) Load(_ context.Context, key K) (value []byte, ok bool) {

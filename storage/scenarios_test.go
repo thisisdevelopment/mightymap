@@ -401,3 +401,31 @@ func TestBadgerCloseStopsValueLogGC(t *testing.T) {
 		})
 	}
 }
+
+// Found by FuzzOperationsBadger: a key that is stored again is still one key.
+func TestBadgerLenCountsAKeyThatIsStoredAgainOnce(t *testing.T) {
+	ctx := context.Background()
+	for name, opts := range map[string][]OptionFuncBadger{
+		"in memory": nil,
+		"on disk":   {WithMemoryStorage(false), WithTempDir(t.TempDir())},
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := NewMightyMapBadgerStorage[string, string](opts...)
+			defer func() { _ = store.Close(ctx) }()
+			store.Store(ctx, "a", "first")
+			if got := store.Len(ctx); got != 1 {
+				t.Fatalf("Len() = %d after one Store, want 1", got)
+			}
+			store.Store(ctx, "a", "second")
+			store.Store(ctx, "b", "other")
+			store.Store(ctx, "a", "third")
+			if got := store.Len(ctx); got != 2 {
+				t.Errorf("Len() = %d with two keys of which one was stored three times, want 2", got)
+			}
+			store.Delete(ctx, "a", "a", "missing")
+			if got := store.Len(ctx); got != 1 {
+				t.Errorf("Len() = %d after deleting one of two keys, want 1", got)
+			}
+		})
+	}
+}
