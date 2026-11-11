@@ -1,224 +1,151 @@
 # MightyMap
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/thisisdevelopment/mightymap.svg)](https://pkg.go.dev/github.com/thisisdevelopment/mightymap)
 [![go report card](https://goreportcard.com/badge/github.com/thisisdevelopment/mightymap "go report card")](https://goreportcard.com/report/github.com/thisisdevelopment/mightymap)
 [![codecov](https://codecov.io/gh/thisisdevelopment/mightymap/graph/badge.svg?token=DMJCBUY273)](https://codecov.io/gh/thisisdevelopment/mightymap)
 [![CircleCI](https://dl.circleci.com/status-badge/img/gh/thisisdevelopment/mightymap/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/gh/thisisdevelopment/mightymap/tree/master)
-[![GoDoc](https://godoc.org/github.com/thisisdevelopment/mightymap?status.svg)](https://godoc.org/github.com/thisisdevelopment/mightymap)
+[![Release](https://img.shields.io/github/v/tag/thisisdevelopment/mightymap?label=release)](https://github.com/thisisdevelopment/mightymap/tags)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+**One typed, concurrent map for Go. You choose where the data lives: a Go map, files on disk, Badger, SQLite or Redis. Changing that is one line.**
 
-MightyMap is a powerful, thread-safe, and concurrent generic map implementation for Go with configurable storage backends. 🔒 It provides type-safe operations through Go generics and flexibility in choosing different storage engines depending on your performance and feature requirements. 🚀 The generic implementation allows you to create strongly-typed maps with any comparable key type and any value type. 💪
+```go
+products := mightymap.New[string, Product](true)                 // in memory
+products := mightymap.New[string, Product](true, segmentStorage) // keys in memory, values on disk
+products := mightymap.New[string, Product](true, redisStorage)   // shared between services
+```
 
-## Features
+The code that calls `Store`, `Load`, `Range` and the rest stays the same.
 
-- **Thread-safe**: Designed for concurrent use without the need for additional synchronization.
-- **Configurable Storage Backends**: Swap out the storage engine as needed. Currently supports:
-  - Default in-memory map with mutex locking.
-  - SwissStorage for optimized performance.
-  - BadgerStorage for persistent key-value storage.
-  - SegmentStorage for data that is larger than memory: keys in memory, values in files on disk, standard library only.
-- **Generic Support**: Works with any comparable key type and any value type.
-- **Flexible Overwrite Behavior**: Choose whether keys can be overwritten or not.
+## Why
 
-## Installation
+A cache usually starts as a `map` with a mutex. Then the data outgrows memory, or has to survive a restart, or has to be shared with another service, and every caller gets rewritten against a new client library. MightyMap puts one small, generic API in front of all of those, so that decision can change later without touching the callers.
 
-To install MightyMap, use `go get`:
+- **Typed.** `Map[K, V]` with generics: no `interface{}`, no casts at the call site.
+- **Safe for concurrent use**, on every storage.
+- **Six storages, one interface.** Bring your own by implementing `storage.IMightyMapStorage`.
+- **Data larger than memory.** The segment storage keeps only the keys in memory and reads values from disk, with nothing but the standard library.
+- **Tested the hard way.** 91% statement coverage, the race detector, and every storage fuzzed against a plain Go map (see [Testing](#testing)).
+
+## Install
 
 ```bash
 go get github.com/thisisdevelopment/mightymap
 ```
 
-## Release notes (unreleased)
+Requires Go 1.23 or newer.
 
-### New: Segment Storage
-
-`storage.NewMightyMapSegmentStorage` is a new storage backend for data that does not fit in memory. It keeps only the keys in memory and the values in files on disk, and uses nothing but the Go standard library.
-
-- New constructor: `NewMightyMapSegmentStorage[K, V](opts ...OptionFuncSegment)`.
-- New options: `WithSegmentDir`, `WithSegmentSize`, `WithSegmentValueCacheSize`.
-- Values are encoded with MessagePack, like in the Badger, SQLite and Redis storages, so custom types come back as the type they were stored as (see [MessagePack Encoding](#messagepack-encoding)).
-- No compaction: disk space comes back per segment file, as soon as none of the values in it is live.
-- The values do not survive a restart. Segment files of an earlier run are removed when the storage opens, and `Close` removes the files of the current run.
-- No new dependencies and no changes to the existing storages or to the `IMightyMapStorage` interface.
-
-See [Segment Storage](#segment-storage) for usage, options and when to pick it.
-
-### Fixes found by fuzzing
-
-- Badger: `Len` counted a key again every time its value was replaced.
-- Default and Swiss storage: `Next` never returned the entry with the zero key (`0`, `""`) and reported an empty storage instead.
-- Decoding: a few damaged bytes that claimed an array of four billion elements made the decoder allocate for all of them (a bug in msgpack v5.4.1). Stored bytes are now checked before they are decoded. This costs about 8% per decoded value. Data that is cut off is now always refused.
-
-### Less memory allocated when storing
-
-Storing a value in a storage that encodes with MessagePack (Badger, SQLite, Redis, Segment) used to grow a new buffer for every value, which allocated about 3.6 times the size of the encoded value. Values are now encoded in a reused buffer:
-
-- Badger, SQLite and Redis get a copy of exactly the encoded size: about a third of the allocation per `Store`.
-- The Segment Storage writes the buffer to its file without a copy: a `Store` of a 4.5 KB value went from 16.4 KB and 10 allocations to 16 bytes and 1 allocation.
-
-No change in behaviour or in the stored format.
-
-## Note v0.3.1 to v0.4.0
-The `ctx` parameter is now required for all methods. This is a breaking change. Since we allow multiple storage backends, we need to be able pass the context to the storage backend.
-
-## Note on swissMap Storage
-Since golang 1.24 the default internal map implementation has been switched to a swiss map implementation. If you're using golang version >= 1.24 the SwissMapStorage implementation is obsolete, and you can just use the default storage (for in memory mightyMaps)
-
-## Storage Changes in v0.5.0
-
-In version 0.5.0, we've made significant changes to the underlying storage implementation for persistent backends (BadgerDB and Redis):
-
-### MessagePack Encoding
-- **New Encoding**: All persistent storage backends now use MessagePack encoding for improved reliability, type safety, and cross-language compatibility
-- **Performance**: MessagePack provides efficient binary serialization with minimal overhead (~2-5% of total operation time)
-- **Type Safety**: Better handling of complex data types including structs, maps, slices, and interfaces
-- **Schema Evolution**: Future-proof format that supports gradual schema changes
-
-### Backward Compatibility
-⚠️ **Breaking Change**: v0.5.0 is **not backward compatible** with previous versions when using BadgerDB or Redis storage backends. Data stored with v0.4.5 and earlier versions uses direct Go encoding, while v0.5.0 uses MessagePack format.
-
-### Redis Username Support
-v0.5.1 also adds support for Redis username authentication (Redis 6.0+ ACL), providing enhanced security for Redis deployments:
-
-```go
-store := storage.NewMightyMapRedisStorage[string, any](
-    storage.WithRedisAddr("localhost:6379"),
-    storage.WithRedisUsername("myuser"),     // New in v0.5.0
-    storage.WithRedisPassword("mypassword"),
-    storage.WithRedisDB(0),
-)
-```
-
-### Migration Tools
-To help with the transition from v0.4.5 to v0.5.0, we provide comprehensive CLI migration tools:
-
-#### Available Tools
-- **`cmd/migrate-badger`**: Migrates BadgerDB data from v0.4.5 (direct storage) to v0.5.0 (MessagePack)
-- **`cmd/migrate-redis`**: Migrates Redis data from v0.4.5 to v0.5.0 with username support
-
-#### Features
-- ✅ **Dry-run mode** to preview changes before migration
-- ✅ **Configurable batch processing** with progress logging
-- ✅ **Key pattern filtering** for selective migration
-- ✅ **Error handling and reporting** with detailed statistics
-- ✅ **Timeout controls** and safe operation practices
-- ✅ **YAML configuration** with example files provided
-
-#### Quick Start
-```bash
-# BadgerDB migration
-cd cmd/migrate-badger
-go run main.go                    # Creates config file
-go run main.go --dry-run --verbose   # Preview migration
-go run main.go --verbose         # Run actual migration
-
-# Redis migration  
-cd cmd/migrate-redis
-go run main.go                    # Creates config file
-go run main.go --dry-run --verbose   # Preview migration
-go run main.go --verbose         # Run actual migration
-```
-
-See `cmd/README.md` for detailed setup instructions and configuration options.
-
-### Why MessagePack?
-The migration to MessagePack provides several benefits:
-- **Reliability**: Consistent encoding/decoding across different Go versions
-- **Performance**: Efficient binary format optimized for storage
-- **Compatibility**: Cross-language support for polyglot environments  
-- **Future-proofing**: Schema evolution capabilities for long-term data integrity
-
-## Usage
-Here is a simple example of how to use MightyMap:
+## Quick start
 
 ```go
 package main
 
 import (
-    "fmt"
-    "github.com/thisisdevelopment/mightymap"
+	"context"
+	"fmt"
+
+	"github.com/thisisdevelopment/mightymap"
+	"github.com/thisisdevelopment/mightymap/storage"
 )
 
+type Product struct {
+	ID    string
+	Title string
+}
+
 func main() {
-    // Create a new concurrent map that allows overwriting existing keys
-    ctx := context.Background()
-    cm := mightymap.New[int, string](true)
+	ctx := context.Background()
 
-    // Store a value
-    cm.Store(ctx, 1, "one")
+	// In memory. Swap this one line to move the values to disk, SQLite or Redis:
+	//   store := storage.NewMightyMapSegmentStorage[string, Product](storage.WithSegmentDir("/var/cache/products"))
+	store := storage.NewMightyMapDefaultStorage[string, Product]()
 
-    // Load a value
-    value, ok := cm.Load(ctx, 1)
-    if ok {
-        fmt.Println("Loaded value:", value)
-    }
+	products := mightymap.New[string, Product](true, store)
+	defer products.Close(ctx)
 
-    // Check if a key exists
-    exists := cm.Has(ctx, 2)
-    fmt.Println("Key 2 exists:", exists)
+	products.Store(ctx, "5083739", Product{ID: "5083739", Title: "Gloss 500ml"})
 
-    // Store more values
-    cm.Store(ctx, 2, "two")
-    cm.Store(ctx, 3, "three")
-
-    // Get all keys
-    keys := cm.Keys(ctx)
-    fmt.Println("All keys:", keys)
-
-    // Delete a key
-    cm.Delete(ctx, 1)
-
-    // Get map length
-    fmt.Println("Map length:", cm.Len(ctx))
-
-    // Clear the map
-    cm.Clear()
+	if product, ok := products.Load(ctx, "5083739"); ok {
+		fmt.Println(product.Title) // Gloss 500ml
+	}
+	fmt.Println(products.Len(ctx), products.Has(ctx, "unknown")) // 1 false
 }
 ```
 
-## Storage Backends
+The first argument of `New` decides what `Store` does with a key that already exists: `true` replaces the value, `false` keeps the first one.
 
-MightyMap allows you to choose different storage backends. Here's how to use them:
+## Choosing a storage
 
-### Default Storage
+| Storage | Values live | Survive a restart | Shared between processes | Memory grows with | Extra dependency | Use it when |
+|---|---|---|---|---|---|---|
+| **Default** | Go map | no | no | keys and values | none | the data fits in memory |
+| **Segment** | files on disk | no | no | keys only | none | the data is larger than memory, written once, read often |
+| **Badger** | Badger, on disk or in memory | yes, on disk | no | Badger's caches | [badger](https://github.com/dgraph-io/badger) | the data has to survive a restart |
+| **SQLite** | one SQLite file | yes | no | SQLite's cache | [go-sqlite3](https://github.com/mattn/go-sqlite3) (cgo) | you want to open the data with other tools |
+| **Redis** | a Redis server | yes | yes | nothing local | [go-redis](https://github.com/redis/go-redis) | several services need the same data |
+| **Swiss** | Swiss table in memory | no | no | keys and values | [swiss](https://github.com/dolthub/swiss) | you are on Go 1.23; from Go 1.24 the default storage is as fast |
 
-Uses the standard Go map with mutex locking.
+Badger, SQLite, Redis and Segment encode values with MessagePack. A value stored as a struct, a pointer or a slice comes back as that type, also in a `Map[K, any]`.
+
+### Default storage
 
 ```go
-store := storage.NewMightyMapDefaultStorage[int, string]()
-cm := mightymap.New[int, string](true, store)
--- or just --
 cm := mightymap.New[int, string](true)
+// the same as
+cm := mightymap.New[int, string](true, storage.NewMightyMapDefaultStorage[int, string]())
 ```
 
-### Swiss Storage
+### Segment storage
 
-Swiss Storage leverages the [dolthub/swiss](https://github.com/dolthub/swiss) package, which implements Swiss-table hash maps in Go for high-performance in-memory storage. Swiss-table hash maps offer faster lookups and lower memory usage compared to Go's native maps, especially beneficial in concurrent environments and with large datasets.
-
-By utilizing Swiss Storage, MightyMap achieves optimized performance for workloads that require fast access and modification of in-memory data.
-
-To use Swiss Storage:
+Keeps only the keys in memory and the values in files on disk. Made for data that is larger than the memory you want to spend on it, is written once, read often and removed in bulk: a cache that loads a new version of its data and then drops the previous one.
 
 ```go
-store := storage.NewMightyMapSwissStorage[int, string]()
-cm := mightymap.New[int, string](true, store)
+store := storage.NewMightyMapSegmentStorage[string, any](
+    storage.WithSegmentDir("/path/to/segments"),
+    storage.WithSegmentValueCacheSize(512 << 20), // keep 512 MB of hot values decoded in memory
+)
+cm := mightymap.New[string, any](false, store)
 ```
 
-You can also customize the initial capacity to optimize memory usage for your specific use case:
+How it works:
 
-```go
-store := storage.NewMightyMapSwissStorage[int, string](storage.WithDefaultCapacity(100_000))
-cm := mightymap.New[int, string](true, store)
+- `Store` appends the encoded value to the current segment file. An index in memory remembers for every key in which file its value is, where it starts and how long it is.
+- `Load` is one read at a known position. Reads do not wait for each other.
+- `Delete` takes the key out of the index. A segment file is removed as soon as none of its values is live. Nothing is ever rewritten: no compaction, no background work.
+- `Keys` and `Len` are answered from the index without touching the disk.
+
+Options:
+
+```
+    WithSegmentDir(dir string)                      // Directory for the segment files; created when missing. Default: a new directory in os.TempDir().
+    WithSegmentSize(segmentSize int64)              // Size in bytes at which a segment file is full. Default: 256 << 20 (256 MB).
+    WithSegmentValueCacheSize(valueCacheSize int64) // Keep up to this many bytes of recently loaded values in memory, decoded. Default: 0 (off).
 ```
 
-### Badger Storage
+Know before you pick it:
 
-Uses BadgerDB for persistent storage.
+- **Memory** grows with the number of keys, not the size of the values: roughly 100 to 150 bytes per key for string keys of about 40 characters.
+- **Not persistent.** The index lives in memory only. Segment files an earlier run left behind are removed when the storage opens, and `Close` removes the files of the current run. Use Badger when the data has to survive a restart.
+- **One storage per directory.** Only files named `mightymap-*.seg` are ever removed.
+- **Disk space comes back per file.** Values stored together and deleted together free their files at once. A value deleted on its own keeps its bytes on disk until every other value in the same file is gone too.
+- **The value cache** hands the same decoded value to every caller: treat loaded values as read-only when it is on.
 
-BadgerDB is an embeddable, persistent, and fast key-value database written in pure Go. It provides efficient storage for key-value data, supporting ACID transactions and achieving high performance on SSDs. Using BadgerDB as a storage backend allows MightyMap to handle large datasets that don't fit entirely in memory, with persistence across application restarts. BadgerDB also supports encryption and compression, making it a versatile choice for various use cases.
+Measured against the Badger storage with values of 7.6 KB on average, in a container limited to 2.5 GiB of memory and 6 CPUs that holds 7.7 GB of values, so most reads come from disk:
 
-For more information about BadgerDB, visit the [BadgerDB GitHub repository](https://github.com/dgraph-io/badger).
+| | Segment Storage | Badger Storage |
+|---|---|---|
+| Store 3.8 GB (510,000 values) | 2.7 - 9.4 s | 27 - 40 s |
+| Go memory allocated while storing them | 0.08 GB | 36 - 40 GB |
+| Random reads per second, 6 CPUs | 297,000 | 2,300 |
+| Read latency p50 / p99 | 6 µs / 0.3 ms | 1.8 ms / 61 ms |
+| Delete 510,000 values | 0.2 s | 11.9 s |
+| Disk used after that delete, 3.9 GB live | 3.9 GB | 9.9 GB |
 
+Raw bytes; decoding a value into a struct comes on top and is the same for both.
 
+### Badger storage
+
+[BadgerDB](https://github.com/dgraph-io/badger) is an embeddable, persistent key-value database in pure Go. Use it when the data has to be there after a restart.
 
 ```go
 store := storage.NewMightyMapBadgerStorage[int, string](
@@ -227,6 +154,8 @@ store := storage.NewMightyMapBadgerStorage[int, string](
 )
 cm := mightymap.New[int, string](true, store)
 ```
+
+`storage.WithValueCacheSize(bytes)` keeps recently loaded values decoded in memory, like the value cache of the segment storage.
 
 For the BadgerDB backend, you can customize the options to optimize performance and storage behavior.
 
@@ -272,72 +201,74 @@ sensible defaults are used if you don't specify options.
 	}
 ```
 
-### Segment Storage
+### SQLite storage
 
-Keeps only the keys in memory and the values in files on disk. It is made for data that is larger than the memory you want to spend on it, is written once, read often and removed in bulk: a cache that loads a new version of its data and then drops the previous one. It uses only the Go standard library.
+One file you can also open with the `sqlite3` command line tool. Needs cgo.
 
 ```go
-store := storage.NewMightyMapSegmentStorage[string, any](
-    storage.WithSegmentDir("/path/to/segments"),
-    storage.WithSegmentValueCacheSize(512 << 20),
+store := storage.NewMightyMapSQLiteStorage[string, any](
+    storage.WithSQLiteDBPath("/path/to/data.db"),
+    storage.WithSQLiteJournalMode("WAL"),
 )
-cm := mightymap.New[string, any](false, store)
+cm := mightymap.New[string, any](true, store)
 ```
 
-How it works:
+Options: `WithSQLiteDBPath`, `WithSQLiteInMemory`, `WithSQLiteTableName`, `WithSQLiteJournalMode`, `WithSQLiteSyncMode`, `WithSQLiteCountCacheDuration`, `WithSQLiteMaxOpenConns`, `WithSQLiteMaxIdleConns`, `WithSQLitePragma`.
 
-- `Store` encodes the value with MessagePack and appends it to the current segment file. An index in memory remembers for every key in which file its value is, where it starts and how long it is.
-- `Load` is one read at a known position in one file. Reads do not wait for each other and are not blocked by the disk access of other reads.
-- When a segment file reaches the segment size the next one is started.
-- `Delete` takes the key out of the index. A segment file is removed as soon as none of its values is live. Nothing is ever rewritten, so there is no compaction and no background work.
-- `Keys` and `Len` are answered from the index without touching the disk. `Range` reads the values one by one and does not lock the storage while your function runs, so that function may store and delete.
+### Redis storage
 
-Options:
+The map lives in a Redis server, so several processes can share it.
 
+```go
+store := storage.NewMightyMapRedisStorage[string, any](
+    storage.WithRedisAddr("localhost:6379"),
+    storage.WithRedisUsername("myuser"),
+    storage.WithRedisPassword("mypassword"),
+    storage.WithRedisPrefix("products:"),
+)
+cm := mightymap.New[string, any](true, store)
 ```
-    WithSegmentDir(dir string)                     // Directory for the segment files; created when missing. Default: a new directory in os.TempDir().
-    WithSegmentSize(segmentSize int64)             // Size in bytes at which a segment file is full. Default: 256 << 20 (256 MB).
-    WithSegmentValueCacheSize(valueCacheSize int64) // Keep up to this many bytes of recently loaded values in memory, decoded. Default: 0 (off).
+
+Options: `WithRedisAddr`, `WithRedisUsername`, `WithRedisPassword`, `WithRedisDB`, `WithRedisPrefix`, `WithRedisExpire`, `WithRedisTimeout`, `WithRedisPoolSize`, `WithRedisMaxRetries`, `WithRedisTLS`, `WithRedisTLSConfig`.
+
+### Swiss storage
+
+Uses [dolthub/swiss](https://github.com/dolthub/swiss). Since Go 1.24 the built-in map is a Swiss table too, so on Go 1.24 and newer the default storage does the same job.
+
+```go
+store := storage.NewMightyMapSwissStorage[int, string](storage.WithDefaultCapacity(100_000))
+cm := mightymap.New[int, string](true, store)
 ```
 
-What to know before you pick it:
+### Your own storage
 
-- **Memory** grows with the number of keys, not with the size of the values: count on roughly 100 to 150 bytes per key for string keys of about 40 characters. The operating system uses free memory to cache the files; that memory is given back under pressure.
-- **Not persistent.** The index lives in memory only. Segment files that an earlier run left in the directory are removed when the storage opens, and `Close` removes the files of the current run, plus the directory when nothing else is in it. Use Badger when the data has to survive a restart.
-- **One storage per directory.** Only files named `mightymap-*.seg` are ever removed; other files in the directory are left alone.
-- **Disk space comes back per file.** Values that were stored together and are deleted together free their files at once. A value that is deleted or replaced on its own keeps its bytes on disk until every other value in the same file is gone too. A workload that keeps replacing single values in a large, long-lived set is better off with Badger. A smaller segment size gives space back sooner.
-- **The value cache** hands the same decoded value to every caller, so treat loaded values as read-only when it is on. Without it every `Load` reads and decodes again.
-- **Errors.** Like the other storages it panics when the directory cannot be created or a value cannot be written (for example a full disk). A value that cannot be read is reported as not found.
-- No fsync, checksums or encryption: the files are a working copy of data that lives elsewhere.
+Implement `storage.IMightyMapStorage[K, V]` (`Load`, `Store`, `Delete`, `Range`, `Keys`, `Next`, `Len`, `Clear`, `Close`) and pass it to `mightymap.New`.
 
-Measured against the Badger storage with values of 7.6 KB on average (Apple M2 Max; a container limited to 2.5 GiB of memory and 6 CPUs, holding 7.7 GB of values, so most reads come from disk):
+## Values of your own types in a `Map[K, any]`
 
-| | Segment Storage | Badger Storage |
-|---|---|---|
-| Store 3.8 GB (510,000 values) | 2.7 - 9.4 s | 27 - 40 s |
-| Go memory allocated while storing them | 0.08 GB | 36 - 40 GB |
-| Random reads per second, 6 CPUs | 297,000 | 2,300 |
-| Read latency p50 / p99 | 6 µs / 0.3 ms | 1.8 ms / 61 ms |
-| Delete 510,000 values | 0.2 s | 11.9 s |
-| Disk used after that delete, 3.9 GB live | 3.9 GB | 9.9 GB |
+The storages that encode values write the name of the type next to the value, so a `Product` stored in a `Map[string, any]` comes back as a `Product`, and a `*Product` as a `*Product`. Types are learned when they are stored. After a restart, tell MightyMap about the types that are already in a persistent storage before you load them:
 
-These numbers are for values as raw bytes; decoding a value into a struct comes on top and is the same for both.
+```go
+mightymap.RegisterType(Product{})
+```
 
-## API Reference
+A typed map such as `Map[string, Product]` never needs this.
 
-### Methods
+## API
 
-- `Load(key K) (value V, ok bool)`: Retrieves the value for a key.
-- `Has(key K) (ok bool)`: Checks if a key exists.
-- `Store(key K, value V)`: Stores a value for a key.
-- `Delete(keys ...K)`: Deletes one or more keys.
-- `Range(f func(key K, value V) bool)`: Iterates over all key-value pairs.
-- `Keys() []K`: Returns all keys in the map in an unspecified order.
-- `Pop(key K) (value V, ok bool)`: Retrieves and deletes a value for a key.
-- `Next() (value V, key K, ok bool)`: Retrieves the next key-value pair.
-- `Len() int`: Returns the number of items in the map.
-- `Clear()`: Removes all items from the map.
-- `Close() error`: Closes the map.
+Every method takes a `context.Context` first, which is passed on to the storage.
+
+- `Load(ctx, key K) (value V, ok bool)`: Retrieves the value for a key.
+- `Has(ctx, key K) (ok bool)`: Checks if a key exists.
+- `Store(ctx, key K, value V)`: Stores a value for a key.
+- `Delete(ctx, keys ...K)`: Deletes one or more keys.
+- `Range(ctx, f func(key K, value V) bool)`: Iterates over all key-value pairs.
+- `Keys(ctx) []K`: Returns all keys in the map in an unspecified order.
+- `Pop(ctx, key K) (value V, ok bool)`: Retrieves and deletes a value for a key.
+- `Next(ctx) (value V, key K, ok bool)`: Retrieves the next key-value pair.
+- `Len(ctx) int`: Returns the number of items in the map.
+- `Clear(ctx)`: Removes all items from the map.
+- `Close(ctx) error`: Closes the map.
 
 ### Constructor
 
@@ -346,9 +277,9 @@ These numbers are for values as raw bytes; decoding a value into a struct comes 
     - `allowOverwrite`: If `true`, existing keys can be overwritten when using `Store()`. If `false`, `Store()` will only insert new keys.
     - `storages`: Optional storage implementation.
 
-## Benchmarks
+Full reference with examples: [pkg.go.dev](https://pkg.go.dev/github.com/thisisdevelopment/mightymap).
 
-Benchmarks are available in the `storage` package to compare the performance of different storage backends. You can run the benchmarks using:
+## Benchmarks
 
 ```bash
 >> go test -benchmem -bench=. ./storage
@@ -375,26 +306,32 @@ PASS
 ok      github.com/thisisdevelopment/mightymap/storage  35.461s
 ```
 
-## Fuzzing
+The Badger and Segment numbers include encoding and decoding.
 
-The public API is fuzzed against a plain Go map: any sequence of `Store`, `Load`, `Has`, `Delete`, `Pop`, `Next`, `Len`, `Keys`, `Range` and `Clear`, with any keys and values, has to give the same answers on every storage backend as the map does. Two more targets feed arbitrary bytes to the decoder, which must refuse them without panicking or allocating for lengths the data does not hold, and check that a value comes back from encoding as the type and value it went in as.
+## Testing
 
 ```bash
-./fuzz.sh                  # every target, 30 seconds each
-./fuzz.sh Operations       # only the targets with Operations in their name
-FUZZ_TIME=5m ./fuzz.sh     # longer
+./run_tests.sh -v                    # unit tests, race detector, every storage, coverage
+./fuzz.sh                            # fuzz every target, 30 seconds each
+FUZZ_TIME=5m ./fuzz.sh Operations    # only the targets with Operations in their name, longer
 ```
 
-A failing input is saved under `testdata/fuzz/` and committed with its fix; `./run_tests.sh` runs all saved inputs as normal tests.
+- **Coverage:** 91% of statements, 100% of the `mightymap` package.
+- **Race detector** on the map and on the storages.
+- **Fuzzing against a plain Go map.** Any sequence of `Store`, `Load`, `Has`, `Delete`, `Pop`, `Next`, `Len`, `Keys`, `Range` and `Clear`, with any keys and values (empty, NUL bytes, invalid UTF-8, text that means something to SQL or to a Redis key pattern), has to give the same answers on every storage as the map does.
+- **Fuzzing the decoder.** Arbitrary bytes must be refused without a panic and without allocating for lengths the data does not hold; a value must come back from encoding as the type and value it went in as.
+- A failing fuzz input is saved under `testdata/fuzz/` and committed with its fix, so every test run replays it.
 
 ## Limitations
-- The **default storage** backend and **Swiss backend** are not thread-safe by default. Using Delete() while iterating with Range() will cause a deadlock. To safely delete items while iterating, collect the keys to delete during Range() and call Delete() with all keys after Range() completes. For example:
+
+- **No errors.** The methods do not return errors. A value that cannot be written (for example a full disk) is a panic; a value that cannot be read or decoded is reported as not found.
+- **`Range` on the default and Swiss storage holds a lock.** Calling `Delete` from inside the function you pass to `Range` deadlocks there. Collect the keys and delete them afterwards:
 
 ```go
 // Collect keys to delete during iteration
 keysToDelete := []K{}
 
-cm.Range(func(key K, value V) bool {
+cm.Range(ctx, func(key K, value V) bool {
     // Replace this condition with your own logic
     if shouldDelete(key, value) {
         keysToDelete = append(keysToDelete, key)
@@ -403,22 +340,15 @@ cm.Range(func(key K, value V) bool {
 })
 
 // Delete all collected keys after iteration
-cm.Delete(keysToDelete...)
+cm.Delete(ctx, keysToDelete...)
 ```
 
-## StorageAPI Reference
+- **The segment storage is not persistent**, see [Segment storage](#segment-storage).
+- **SQLite needs cgo.**
 
-### Methods
-```
-	Load(ctx context.Context, key K) (value V, ok bool)
-	Store(ctx context.Context, key K, value V)
-	Delete(ctx context.Context, keys ...K)
-	Range(ctx context.Context, f func(key K, value V) bool)
-	Keys(ctx context.Context) []K
-	Next(ctx context.Context) (key K, value V, ok bool)
-	Len(ctx context.Context) int
-	Clear(ctx context.Context)
-```
+## Versions and upgrading
+
+Changes per version, including what breaks, are in [CHANGELOG.md](CHANGELOG.md). Data written by v0.4.5 or older with Badger or Redis has to be migrated once; the tools for that are in [`cmd/`](cmd/README.md).
 
 ## About Us Th[is]
 
@@ -431,4 +361,3 @@ Contributions are welcome! We especially encourage contributions of new storage 
 ## License
 
 This project is licensed under the MIT License.
-
