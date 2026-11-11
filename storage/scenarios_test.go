@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"runtime/pprof"
+	"strings"
 	"testing"
 	"time"
 
@@ -342,6 +344,57 @@ func TestBadgerEncryptionKeyLength(t *testing.T) {
 				}
 			}()
 			WithEncryptionKey(key)
+		})
+	}
+}
+
+// badgerGCGoroutines counts the background goroutines that Badger storages
+// started themselves (their value log GC).
+func badgerGCGoroutines() int {
+	var dump bytes.Buffer
+	_ = pprof.Lookup("goroutine").WriteTo(&dump, 2)
+	count := 0
+	for _, line := range strings.Split(dump.String(), "\n") {
+		if strings.HasPrefix(line, "created by ") && strings.Contains(line, "storage.NewMightyMapBadgerStorage") {
+			count++
+		}
+	}
+	return count
+}
+
+// Closing a Badger storage must stop its value log GC. It used to keep
+// running, and to hold on to the closed database, for as long as the process
+// lived.
+func TestBadgerCloseStopsValueLogGC(t *testing.T) {
+	ctx := context.Background()
+	modes := map[string][]OptionFuncBadger{
+		"in memory": {WithGcInterval(time.Millisecond)},
+		"on disk":   {WithGcInterval(time.Millisecond), WithMemoryStorage(false), WithTempDir(t.TempDir())},
+	}
+	for name, opts := range modes {
+		t.Run(name, func(t *testing.T) {
+			before := badgerGCGoroutines()
+			store := NewMightyMapBadgerStorage[string, int](opts...)
+			store.Store(ctx, "key", 1)
+			time.Sleep(20 * time.Millisecond) // let the GC come round a few times
+			if got := badgerGCGoroutines(); got != before+1 {
+				t.Fatalf("%d GC goroutines while the storage is open, want %d", got, before+1)
+			}
+
+			if err := store.Close(ctx); err != nil {
+				t.Fatalf("Close(): %v", err)
+			}
+			deadline := time.Now().Add(2 * time.Second)
+			for badgerGCGoroutines() != before && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if got := badgerGCGoroutines(); got != before {
+				t.Errorf("%d GC goroutines after Close, want %d", got, before)
+			}
+
+			if err := store.Close(ctx); err != nil {
+				t.Errorf("second Close(): %v", err)
+			}
 		})
 	}
 }

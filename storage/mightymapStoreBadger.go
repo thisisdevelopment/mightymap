@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"log"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -15,6 +16,12 @@ type mightyMapBadgerStorage[K comparable] struct {
 	db          *badger.DB
 	len         atomic.Int64
 	initLenCall atomic.Bool
+
+	// The value log GC runs in the background; Close closes stopGC once and
+	// waits for gcStopped.
+	stopGC    chan struct{}
+	gcStopped chan struct{}
+	closeOnce sync.Once
 }
 
 // OptionFuncBadger is a function type that modifies badgerOpts configuration.
@@ -103,20 +110,18 @@ func NewMightyMapBadgerStorage[K comparable, V any](optfuncs ...OptionFuncBadger
 		panic(err)
 	}
 
-	// start a goroutine to run value log GC, sensible defaults according to the docs
-	go func() {
-		ticker := time.NewTicker(opts.gcInterval)
-		defer ticker.Stop()
-		for range ticker.C {
-			_ = db.RunValueLogGC(opts.gcPercentage)
-		}
-	}()
-
 	storage := &mightyMapBadgerStorage[K]{
 		db:          db,
 		len:         atomic.Int64{},
 		initLenCall: atomic.Bool{},
+		stopGC:      make(chan struct{}),
+		gcStopped:   make(chan struct{}),
 	}
+
+	// run value log GC in the background until the storage is closed, sensible
+	// defaults according to the docs
+	go storage.runValueLogGC(opts.gcInterval, opts.gcPercentage)
+
 	adapter := newMsgpackAdapter[K, V](storage)
 	adapter.cache = newValueCache[K, V](opts.valueCacheSize)
 	return adapter
@@ -338,5 +343,26 @@ func (c *mightyMapBadgerStorage[K]) Next(ctx context.Context) (key K, value []by
 }
 
 func (c *mightyMapBadgerStorage[K]) Close(_ context.Context) error {
+	// Stop the value log GC first and wait for it, so it does not run on a
+	// closed database and does not keep that database alive.
+	c.closeOnce.Do(func() { close(c.stopGC) })
+	<-c.gcStopped
+
 	return c.db.Close()
+}
+
+// runValueLogGC runs Badger's value log GC every interval until Close.
+func (c *mightyMapBadgerStorage[K]) runValueLogGC(interval time.Duration, discardRatio float64) {
+	defer close(c.gcStopped)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			_ = c.db.RunValueLogGC(discardRatio)
+		case <-c.stopGC:
+			return
+		}
+	}
 }
