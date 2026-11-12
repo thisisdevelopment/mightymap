@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.7.2
 
 ### New: compact structs in the Segment Storage
 
