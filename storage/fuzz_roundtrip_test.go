@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
@@ -11,7 +12,8 @@ import (
 //
 // Invariant: what is read back equals what was stored and has the same type,
 // whether it went in as a struct, a pointer, a slice or a plain value, and
-// whatever bytes its strings hold.
+// whatever bytes its strings hold, with and without the names of the struct
+// fields in the encoding.
 func FuzzMsgpackRoundTrip(f *testing.F) {
 	f.Add("5083739", "Dulux Gloss 500ml", true, 2.5, int64(3))
 	f.Add("", "", false, 0.0, int64(0))
@@ -46,16 +48,20 @@ func FuzzMsgpackRoundTrip(f *testing.F) {
 			"float":   size,
 			"bool":    private,
 		} {
-			encoded, err := msgpackEncodeValue(want)
-			if err != nil {
-				t.Fatalf("%s: encode: %v", name, err)
-			}
-			got, err := msgpackDecodeValue[any](encoded)
-			if err != nil {
-				t.Fatalf("%s: decode: %v", name, err)
-			}
-			if !reflect.DeepEqual(got, want) {
-				t.Fatalf("%s: got %T %#v, want %T %#v", name, got, got, want, want)
+			// with the names of the struct fields, and without them as the
+			// segment storage can write them
+			for _, compact := range []bool{false, true} {
+				var buf bytes.Buffer
+				if err := msgpackEncodeInto(&buf, want, compact); err != nil {
+					t.Fatalf("%s: encode: %v", name, err)
+				}
+				got, err := msgpackDecodeValue[any](buf.Bytes())
+				if err != nil {
+					t.Fatalf("%s, compact %v: decode: %v", name, compact, err)
+				}
+				if !reflect.DeepEqual(got, want) {
+					t.Fatalf("%s, compact %v: got %T %#v, want %T %#v", name, compact, got, got, want, want)
+				}
 			}
 		}
 

@@ -28,6 +28,9 @@ type msgpackAdapter[K comparable, V any] struct {
 	// storageKeepsNothing is set for a storage whose Store does not hold on to
 	// the slice it is given: it then gets the encode buffer itself, not a copy.
 	storageKeepsNothing bool
+	// compactStructs writes structs as arrays, without the names of their
+	// fields. Reading does not need it: the decoder takes both.
+	compactStructs bool
 }
 
 // newMsgpackAdapter creates a new adapter that uses MessagePack encoding to convert between V and []byte
@@ -69,7 +72,7 @@ func msgpackEncodeValue[V any](value V) ([]byte, error) {
 	buf := getEncodeBuffer()
 	defer putEncodeBuffer(buf)
 
-	if err := msgpackEncodeInto(buf, value); err != nil {
+	if err := msgpackEncodeInto(buf, value, false); err != nil {
 		return nil, err
 	}
 	return cloneExact(buf.Bytes()), nil
@@ -82,8 +85,10 @@ func cloneExact(data []byte) []byte {
 	return clone
 }
 
-// msgpackEncodeInto appends the MessagePack encoding of value to buf.
-func msgpackEncodeInto[V any](buf *bytes.Buffer, value V) error {
+// msgpackEncodeInto appends the MessagePack encoding of value to buf. With
+// compactStructs a struct is written as an array of its field values instead
+// of a map from field name to value.
+func msgpackEncodeInto[V any](buf *bytes.Buffer, value V, compactStructs bool) error {
 	// Store the type information along with the value, but only for non-nil,
 	// non-interface types
 	valueType := reflect.TypeOf(value)
@@ -92,6 +97,7 @@ func msgpackEncodeInto[V any](buf *bytes.Buffer, value V) error {
 	enc := msgpack.GetEncoder()
 	defer msgpack.PutEncoder(enc)
 	enc.Reset(buf)
+	enc.UseArrayEncodedStructs(compactStructs)
 
 	// The type goes first, so a reader knows it before it reaches the data and
 	// can decode the data in one go.
@@ -378,7 +384,7 @@ func (m *msgpackAdapter[K, V]) Store(ctx context.Context, key K, value V) {
 	buf := getEncodeBuffer()
 	defer putEncodeBuffer(buf)
 
-	if err := msgpackEncodeInto(buf, value); err != nil {
+	if err := msgpackEncodeInto(buf, value, m.compactStructs); err != nil {
 		// If we can't encode, we don't store anything
 		return
 	}

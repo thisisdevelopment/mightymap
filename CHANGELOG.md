@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.7.2
+
+### New: compact structs in the Segment Storage
+
+`storage.WithSegmentCompactStructs()` writes structs without the names of their fields, as the list of their field values. Reading a struct with many fields spends a large part of its time on reading every field name and looking it up; without the names the files are smaller and a `Load` is faster. With a value of 4.5 KB: 29% smaller, decoding 19% faster (22.2 to 17.9 µs).
+
+- Off by default: nothing changes for existing code.
+- Only for the Segment Storage, whose files never outlive the process that wrote them. Badger, SQLite and Redis keep the field names, so stored data stays readable when a struct changes.
+- Values come back the same, with one exception: a struct held in a field or element of type `any` comes back as a `[]any` of its field values instead of a `map[string]any`.
+- Reading needs no option: the decoder takes both forms.
+- The value cache counts values by their encoded size. Smaller values mean the same `WithSegmentValueCacheSize` holds more of them, and more memory: lower it to keep the memory the same.
+
 ## v0.7.1
 
 Security update of two dependencies that come in through Badger.

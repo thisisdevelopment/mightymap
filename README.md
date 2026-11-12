@@ -120,6 +120,7 @@ Options:
     WithSegmentDir(dir string)                      // Directory for the segment files; created when missing. Default: a new directory in os.TempDir().
     WithSegmentSize(segmentSize int64)              // Size in bytes at which a segment file is full. Default: 256 << 20 (256 MB).
     WithSegmentValueCacheSize(valueCacheSize int64) // Keep up to this many bytes of recently loaded values in memory, decoded. Default: 0 (off).
+    WithSegmentCompactStructs()                     // Write structs without the names of their fields: smaller files, faster Load. Default: off.
 ```
 
 Know before you pick it:
@@ -129,6 +130,7 @@ Know before you pick it:
 - **One storage per directory.** Only files named `mightymap-*.seg` are ever removed.
 - **Disk space comes back per file.** Values stored together and deleted together free their files at once. A value deleted on its own keeps its bytes on disk until every other value in the same file is gone too.
 - **The value cache** hands the same decoded value to every caller: treat loaded values as read-only when it is on.
+- **Compact structs** (`WithSegmentCompactStructs`) leave the field names out of the files: a struct is written as the list of its field values. In a benchmark with a 4.5 KB value that made the value 29% smaller and a `Load` 19% faster. Values come back the same, except a struct that sits in a field of type `any`: it has no type to decode into and comes back as a `[]any` of its field values instead of a `map[string]any`. The value cache counts values by their encoded size, so the same cache size holds more values and more memory than before: lower it to keep the memory the same. The other storages keep the field names, because their data can outlive the program that wrote it.
 
 Measured against the Badger storage with values of 7.6 KB on average, in a container limited to 2.5 GiB of memory and 6 CPUs that holds 7.7 GB of values, so most reads come from disk:
 
