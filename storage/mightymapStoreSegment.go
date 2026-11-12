@@ -20,6 +20,7 @@ type segmentOpts struct {
 	dir            string
 	segmentSize    int64
 	valueCacheSize int64
+	compactStructs bool
 }
 
 // OptionFuncSegment is a function type that modifies segmentOpts configuration.
@@ -65,6 +66,26 @@ func WithSegmentValueCacheSize(valueCacheSize int64) OptionFuncSegment {
 	}
 }
 
+// WithSegmentCompactStructs writes structs without the names of their fields:
+// as a list of the field values, in the order of the struct. The files get
+// smaller and a Load does not have to read every name and look it up, which is
+// a large part of decoding a struct with many fields.
+//
+// It is safe here because the files never outlive the process that wrote
+// them, so they are always read with the struct they were written with.
+// Values come back the same, with one exception: a struct that sits in a
+// field or element of type any has no type to decode into, and comes back as
+// a []any of its field values instead of a map[string]any.
+//
+// The value cache counts values by their encoded size, which gets smaller: the
+// same WithSegmentValueCacheSize then holds more values and so more memory.
+// **Default value**: off, structs are written with their field names
+func WithSegmentCompactStructs() OptionFuncSegment {
+	return func(o *segmentOpts) {
+		o.compactStructs = true
+	}
+}
+
 // NewMightyMapSegmentStorage creates a thread-safe storage that keeps only the
 // keys in memory and the values in files on disk. It needs nothing but the
 // standard library.
@@ -97,6 +118,7 @@ func NewMightyMapSegmentStorage[K comparable, V any](optfuncs ...OptionFuncSegme
 	adapter := newMsgpackAdapter[K, V](newSegmentStorage[K](opts.dir, opts.segmentSize))
 	adapter.cache = newValueCache[K, V](opts.valueCacheSize)
 	adapter.storageKeepsNothing = true // Store writes the value to a file and is done with it
+	adapter.compactStructs = opts.compactStructs
 	return adapter
 }
 
